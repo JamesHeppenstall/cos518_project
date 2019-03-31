@@ -5,16 +5,22 @@ import (
 	"sync"
 )
 
+type ApplyMsg struct {
+	Operation interface{}
+}
+
 type LogEntry struct {
 	Operation interface{}
 }
 
 // A Go object implementing a single XPaxos peer
 type XPaxos struct {
-	mu               Sync.Mutex
+	mu               sync.Mutex
+	persister        *Persister
 	replicas         []*labrpc.ClientEnd // Contains all replicas including this one
 	synchronousGroup []*labrpc.ClientEnd
-	id               int
+	Id               int
+	view             int
 	leaderId         int
 	prepareSeqNum    int
 	executeSeqNum    int
@@ -22,13 +28,30 @@ type XPaxos struct {
 	commitLog        []LogEntry
 }
 
-func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister) *XPaxos {
+func (xp *XPaxos) GetState() (int, bool) {
+	var isLeader bool
+
+	xp.mu.Lock()
+	defer xp.mu.Unlock()
+
+	view := xp.view
+
+	if xp.Id == xp.leaderId {
+		isLeader = true
+	} else {
+		isLeader = false
+	}
+
+	return view, isLeader
+}
+
+func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister, applyCh chan ApplyMsg) *XPaxos {
 	xp := &XPaxos{}
 
 	xp.mu.Lock()
 	xp.replicas = replicas
 	xp.persister = persister
-	xp.id = id
+	xp.Id = id
 	xp.leaderId = 1
 	xp.prepareSeqNum = 0
 	xp.executeSeqNum = 0
@@ -39,6 +62,5 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister) *XPaxos {
 	return xp
 }
 
-func main() {
-	print("hello world")
+func (xp *XPaxos) Kill() {
 }

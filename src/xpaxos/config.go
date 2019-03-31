@@ -1,23 +1,17 @@
 package xpaxos
 
-//
-// support for Raft tester.
-//
-// we will use the original config.go to test your code for grading.
-// so, while you can modify this code to help you debug, please
-// test with the original before submitting.
-//
-
 import "labrpc"
-import "log"
+
+//import "log"
 import "sync"
 import "testing"
 import "runtime"
 import crand "crypto/rand"
 import "encoding/base64"
 import "sync/atomic"
-import "time"
-import "fmt"
+
+//import "time"
+//import "fmt"
 
 func randstring(n int) string {
 	b := make([]byte, 2*n)
@@ -31,13 +25,13 @@ type config struct {
 	t         *testing.T
 	net       *labrpc.Network
 	n         int
-	done      int32 // tell internal threads to die
-	rafts     []*Raft
-	applyErr  []string // from apply channel readers
-	connected []bool   // whether each server is on the net
+	done      int32 // Tell internal threads to die
+	xpServers []*XPaxos
+	applyErr  []string // From apply channel readers
+	connected []bool   // Whether each server is on the net
 	saved     []*Persister
-	endnames  [][]string    // the port file names each sends to
-	logs      []map[int]int // copy of each server's committed entries
+	endnames  [][]string    // The port file names each sends to
+	logs      []map[int]int // Copy of each server's committed entries
 }
 
 func make_config(t *testing.T, n int, unreliable bool) *config {
@@ -47,23 +41,23 @@ func make_config(t *testing.T, n int, unreliable bool) *config {
 	cfg.net = labrpc.MakeNetwork()
 	cfg.n = n
 	cfg.applyErr = make([]string, cfg.n)
-	cfg.rafts = make([]*Raft, cfg.n)
+	cfg.xpServers = make([]*XPaxos, cfg.n)
 	cfg.connected = make([]bool, cfg.n)
 	cfg.saved = make([]*Persister, cfg.n)
 	cfg.endnames = make([][]string, cfg.n)
 	cfg.logs = make([]map[int]int, cfg.n)
 
-	cfg.setunreliable(unreliable)
+	cfg.setUnreliable(unreliable)
 
-	cfg.net.LongDelays(true)
+	cfg.net.LongDelays(false)
 
-	// create a full set of Rafts.
+	// Create a full set of XPaxos servers
 	for i := 0; i < cfg.n; i++ {
 		cfg.logs[i] = map[int]int{}
 		cfg.start1(i)
 	}
 
-	// connect everyone
+	// Connect everyone
 	for i := 0; i < cfg.n; i++ {
 		cfg.connect(i)
 	}
@@ -71,55 +65,49 @@ func make_config(t *testing.T, n int, unreliable bool) *config {
 	return cfg
 }
 
-// shut down a Raft server but save its persistent state.
+// Shut down an XPaxos server but save its persistent state
 func (cfg *config) crash1(i int) {
 	cfg.disconnect(i)
-	cfg.net.DeleteServer(i) // disable client connections to the server.
+	cfg.net.DeleteServer(i) // Disable client connections to the server
 
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
 
-	// a fresh persister, in case old instance
-	// continues to update the Persister.
-	// but copy old persister's content so that we always
-	// pass Make() the last persisted state.
+	// A fresh persister, in case old instance continues to update the Persister
+	// Copy old persister's content so that we always pass Make() the last persisted state
 	if cfg.saved[i] != nil {
 		cfg.saved[i] = cfg.saved[i].Copy()
 	}
 
-	rf := cfg.rafts[i]
-	if rf != nil {
+	xp := cfg.xpServers[i]
+	if xp != nil {
 		cfg.mu.Unlock()
-		rf.Kill()
+		xp.Kill()
 		cfg.mu.Lock()
-		cfg.rafts[i] = nil
+		cfg.xpServers[i] = nil
 	}
 
 	if cfg.saved[i] != nil {
-		raftlog := cfg.saved[i].ReadRaftState()
+		xpLog := cfg.saved[i].ReadXPaxosState()
 		cfg.saved[i] = &Persister{}
-		cfg.saved[i].SaveRaftState(raftlog)
+		cfg.saved[i].SaveXPaxosState(xpLog)
 	}
 }
 
-//
-// start or re-start a Raft.
-// if one already exists, "kill" it first.
-// allocate new outgoing port file names, and a new
-// state persister, to isolate previous instance of
-// this server. since we cannot really kill it.
-//
+// Start or re-start an XPaxos server
+// If one already exists, "kill" it first
+// Allocate new outgoing port file names, and a new state persister, to isolate previous instance of
+// this server. since we cannot really kill it
 func (cfg *config) start1(i int) {
 	cfg.crash1(i)
 
-	// a fresh set of outgoing ClientEnd names.
-	// so that old crashed instance's ClientEnds can't send.
+	// A fresh set of outgoing ClientEnd names so that old crashed instance's ClientEnds can't send
 	cfg.endnames[i] = make([]string, cfg.n)
 	for j := 0; j < cfg.n; j++ {
 		cfg.endnames[i][j] = randstring(20)
 	}
 
-	// a fresh set of ClientEnds.
+	// A fresh set of ClientEnds
 	ends := make([]*labrpc.ClientEnd, cfg.n)
 	for j := 0; j < cfg.n; j++ {
 		ends[j] = cfg.net.MakeEnd(cfg.endnames[i][j])
@@ -128,10 +116,8 @@ func (cfg *config) start1(i int) {
 
 	cfg.mu.Lock()
 
-	// a fresh persister, so old instance doesn't overwrite
-	// new instance's persisted state.
-	// but copy old persister's content so that we always
-	// pass Make() the last persisted state.
+	// A fresh persister, so old instance doesn't overwrite new instance's persisted state
+	// Copy old persister's content so that we always pass Make() the last persisted state
 	if cfg.saved[i] != nil {
 		cfg.saved[i] = cfg.saved[i].Copy()
 	} else {
@@ -140,9 +126,10 @@ func (cfg *config) start1(i int) {
 
 	cfg.mu.Unlock()
 
-	// listen to messages from Raft indicating newly committed messages.
+	// Listen to messages from XPaxos indicating newly committed messages
 	applyCh := make(chan ApplyMsg)
-	go func() {
+
+	/*go func() {
 		for m := range applyCh {
 			err_msg := ""
 			if m.UseSnapshot {
@@ -174,36 +161,36 @@ func (cfg *config) start1(i int) {
 				// holding locks...
 			}
 		}
-	}()
+	}()*/
 
-	rf := Make(ends, i, cfg.saved[i], applyCh)
+	xp := Make(ends, i, cfg.saved[i], applyCh)
 
 	cfg.mu.Lock()
-	cfg.rafts[i] = rf
+	cfg.xpServers[i] = xp
 	cfg.mu.Unlock()
 
-	svc := labrpc.MakeService(rf)
+	svc := labrpc.MakeService(xp)
 	srv := labrpc.MakeServer()
 	srv.AddService(svc)
 	cfg.net.AddServer(i, srv)
 }
 
 func (cfg *config) cleanup() {
-	for i := 0; i < len(cfg.rafts); i++ {
-		if cfg.rafts[i] != nil {
-			cfg.rafts[i].Kill()
+	for i := 0; i < len(cfg.xpServers); i++ {
+		if cfg.xpServers[i] != nil {
+			cfg.xpServers[i].Kill()
 		}
 	}
 	atomic.StoreInt32(&cfg.done, 1)
 }
 
-// attach server i to the net.
+// Attach server i to the net.
 func (cfg *config) connect(i int) {
 	// fmt.Printf("connect(%d)\n", i)
 
 	cfg.connected[i] = true
 
-	// outgoing ClientEnds
+	// Outgoing ClientEnds
 	for j := 0; j < cfg.n; j++ {
 		if cfg.connected[j] {
 			endname := cfg.endnames[i][j]
@@ -211,7 +198,7 @@ func (cfg *config) connect(i int) {
 		}
 	}
 
-	// incoming ClientEnds
+	// Incoming ClientEnds
 	for j := 0; j < cfg.n; j++ {
 		if cfg.connected[j] {
 			endname := cfg.endnames[j][i]
@@ -220,13 +207,13 @@ func (cfg *config) connect(i int) {
 	}
 }
 
-// detach server i from the net.
+// Detach server i from the net.
 func (cfg *config) disconnect(i int) {
 	// fmt.Printf("disconnect(%d)\n", i)
 
 	cfg.connected[i] = false
 
-	// outgoing ClientEnds
+	// Outgoing ClientEnds
 	for j := 0; j < cfg.n; j++ {
 		if cfg.endnames[i] != nil {
 			endname := cfg.endnames[i][j]
@@ -234,7 +221,7 @@ func (cfg *config) disconnect(i int) {
 		}
 	}
 
-	// incoming ClientEnds
+	// Incoming ClientEnds
 	for j := 0; j < cfg.n; j++ {
 		if cfg.endnames[j] != nil {
 			endname := cfg.endnames[j][i]
@@ -247,17 +234,17 @@ func (cfg *config) rpcCount(server int) int {
 	return cfg.net.GetCount(server)
 }
 
-func (cfg *config) setunreliable(unrel bool) {
+func (cfg *config) setUnreliable(unrel bool) {
 	cfg.net.Reliable(!unrel)
 }
 
-func (cfg *config) setlongreordering(longrel bool) {
+func (cfg *config) setLongReordering(longrel bool) {
 	cfg.net.LongReordering(longrel)
 }
 
-// check that there's exactly one leader.
-// try a few times in case re-elections are needed.
-func (cfg *config) checkOneLeader() int {
+// Check that there's exactly one leader
+// Try a few times in case re-elections are needed
+/*func (cfg *config) checkOneLeader() int {
 	for iters := 0; iters < 10; iters++ {
 		time.Sleep(500 * time.Millisecond)
 		leaders := make(map[int][]int)
@@ -285,10 +272,10 @@ func (cfg *config) checkOneLeader() int {
 	}
 	cfg.t.Fatal("expected one leader, got none")
 	return -1
-}
+}*/
 
 // check that everyone agrees on the term.
-func (cfg *config) checkTerms() int {
+/*func (cfg *config) checkTerms() int {
 	term := -1
 	for i := 0; i < cfg.n; i++ {
 		if cfg.connected[i] {
@@ -301,22 +288,22 @@ func (cfg *config) checkTerms() int {
 		}
 	}
 	return term
-}
+}*/
 
-// check that there's no leader
+// Check that there's no leader
 func (cfg *config) checkNoLeader() {
 	for i := 0; i < cfg.n; i++ {
 		if cfg.connected[i] {
-			_, is_leader := cfg.rafts[i].GetState()
-			if is_leader {
+			_, isLeader := cfg.xpServers[i].GetState()
+			if isLeader {
 				cfg.t.Fatalf("expected no leader, but %v claims to be leader\n", i)
 			}
 		}
 	}
 }
 
-// how many servers think a log entry is committed?
-func (cfg *config) nCommitted(index int) (int, interface{}) {
+// How many servers think a log entry is committed?
+/*func (cfg *config) nCommitted(index int) (int, interface{}) {
 	count := 0
 	cmd := -1
 	for i := 0; i < len(cfg.rafts); i++ {
@@ -338,11 +325,10 @@ func (cfg *config) nCommitted(index int) (int, interface{}) {
 		}
 	}
 	return count, cmd
-}
+}*/
 
-// wait for at least n servers to commit.
-// but don't wait forever.
-func (cfg *config) wait(index int, n int, startTerm int) interface{} {
+// Wait for at least n servers to commit but don't wait forever.
+/*func (cfg *config) wait(index int, n int, startTerm int) interface{} {
 	to := 10 * time.Millisecond
 	for iters := 0; iters < 30; iters++ {
 		nd, _ := cfg.nCommitted(index)
@@ -369,7 +355,7 @@ func (cfg *config) wait(index int, n int, startTerm int) interface{} {
 			nd, index, n)
 	}
 	return cmd
-}
+}*/
 
 // do a complete agreement.
 // it might choose the wrong leader initially,
@@ -379,7 +365,7 @@ func (cfg *config) wait(index int, n int, startTerm int) interface{} {
 // same value, since nCommitted() checks this,
 // as do the threads that read from applyCh.
 // returns index.
-func (cfg *config) one(cmd int, expectedServers int) int {
+/*func (cfg *config) one(cmd int, expectedServers int) int {
 	t0 := time.Now()
 	starts := 0
 	for time.Since(t0).Seconds() < 10 {
@@ -423,4 +409,4 @@ func (cfg *config) one(cmd int, expectedServers int) int {
 	}
 	cfg.t.Fatalf("one(%v) failed to reach agreement\n", cmd)
 	return -1
-}
+}*/
