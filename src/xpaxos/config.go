@@ -34,7 +34,7 @@ type config struct {
 	logs      []map[int]int // Copy of each server's committed entries
 }
 
-func make_config(t *testing.T, n int, unreliable bool) *config {
+func MakeConfig(t *testing.T, n int, unreliable bool) *config {
 	runtime.GOMAXPROCS(4)
 	cfg := &config{}
 	cfg.t = t

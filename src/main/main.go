@@ -1,10 +1,14 @@
 package main
 
-import "xpaxos"
+import (
+	"time"
+	"xpaxos"
+)
 
 func main() {
-	xp := &xpaxos.XPaxos{}
-	print(xp.Id)
-
-	print("Hello World")
+	servers := 2
+	xpaxos.MakeConfig(nil, servers, false)
+	time.Sleep(5 * time.Second)
+	//print(cfg)
+	//print("Hello World\n")
 }
