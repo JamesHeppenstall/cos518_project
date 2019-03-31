@@ -1,4 +1,4 @@
-package raft
+package xpaxos
 
 //
 // support for Raft and kvraft to save persistent
