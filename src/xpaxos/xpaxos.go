@@ -48,11 +48,11 @@ func (xp *XPaxos) GetState() (int, bool) {
 }
 
 type Args struct {
-	str string
+	Str string
 }
 
 type Reply struct {
-	str string
+	Str string
 }
 
 func (xp *XPaxos) PrintString(args Args, reply *Reply) {
@@ -81,7 +81,7 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister, applyCh ch
 	go func() {
 		fmt.Printf("Id: %d", xp.Id)
 		args := Args{}
-		args.str = "Hello"
+		args.Str = "Hello"
 
 		reply := Reply{}
 		if ok := xp.sendRPC(0, args, &reply); ok {
