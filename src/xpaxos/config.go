@@ -66,17 +66,9 @@ func MakeConfig(t *testing.T, n int, unreliable bool) *config {
 		cfg.connect(i)
 	}
 
-	cfg.publishClientRPC()
+	cfg.client.propose()
 
 	return cfg
-}
-
-func (cfg *config) publishClientRPC() {
-	if (cfg.client != nil) {
-		return
-	}
-
-
 }
 
 // Shut down an XPaxos server but save its persistent state
@@ -140,10 +132,7 @@ func (cfg *config) start1(i int) {
 
 	cfg.mu.Unlock()
 
-	// Listen to messages from XPaxos indicating newly committed messages
-	applyCh := make(chan ApplyMsg)
-
-	xp := Make(ends, i, cfg.saved[i], applyCh)
+	xp := Make(ends, i, cfg.saved[i])
 
 	cfg.mu.Lock()
 	cfg.xpServers[i] = xp
@@ -175,10 +164,7 @@ func (cfg *config) startClient(i int) {
 		cfg.net.Connect(cfg.endnames[i][j], j)
 	}
 
-	// Listen to messages from XPaxos indicating newly committed messages
-	applyCh := make(chan ClientMsg)
-
-	client := MakeClient(ends, applyCh)
+	client := MakeClient(ends)
 
 	cfg.mu.Lock()
 	cfg.client = client
@@ -222,8 +208,6 @@ func (cfg *config) cleanup() {
 
 // Attach server i to the net.
 func (cfg *config) connect(i int) {
-	// fmt.Printf("connect(%d)\n", i)
-
 	cfg.connected[i] = true
 
 	// Outgoing ClientEnds
@@ -278,53 +262,6 @@ func (cfg *config) setLongReordering(longrel bool) {
 	cfg.net.LongReordering(longrel)
 }
 
-// Check that there's exactly one leader
-// Try a few times in case re-elections are needed
-/*func (cfg *config) checkOneLeader() int {
-	for iters := 0; iters < 10; iters++ {
-		time.Sleep(500 * time.Millisecond)
-		leaders := make(map[int][]int)
-		for i := 0; i < cfg.n; i++ {
-			if cfg.connected[i] {
-				if t, leader := cfg.rafts[i].GetState(); leader {
-					leaders[t] = append(leaders[t], i)
-				}
-			}
-		}
-
-		lastTermWithLeader := -1
-		for t, leaders := range leaders {
-			if len(leaders) > 1 {
-				cfg.t.Fatalf("term %d has %d (>1) leaders\n", t, len(leaders))
-			}
-			if t > lastTermWithLeader {
-				lastTermWithLeader = t
-			}
-		}
-
-		if len(leaders) != 0 {
-			return leaders[lastTermWithLeader][0]
-		}
-	}
-	cfg.t.Fatal("expected one leader, got none")
-	return -1
-}*/
-
-// check that everyone agrees on the term.
-/*func (cfg *config) checkTerms() int {
-	term := -1
-	for i := 0; i < cfg.n; i++ {
-		if cfg.connected[i] {
-			xterm, _ := cfg.rafts[i].GetState()
-			if term == -1 {
-				term = xterm
-			} else if term != xterm {
-				cfg.t.Fatal("servers disagree on term")
-			}
-		}
-	}
-	return term
-}*/
 
 // Check that there's no leader
 func (cfg *config) checkNoLeader() {
@@ -338,111 +275,3 @@ func (cfg *config) checkNoLeader() {
 	}
 }
 
-// How many servers think a log entry is committed?
-/*func (cfg *config) nCommitted(index int) (int, interface{}) {
-	count := 0
-	cmd := -1
-	for i := 0; i < len(cfg.rafts); i++ {
-		if cfg.applyErr[i] != "" {
-			cfg.t.Fatal(cfg.applyErr[i])
-		}
-
-		cfg.mu.Lock()
-		cmd1, ok := cfg.logs[i][index]
-		cfg.mu.Unlock()
-
-		if ok {
-			if count > 0 && cmd != cmd1 {
-				cfg.t.Fatalf("committed values do not match: index %v, %v, %v\n",
-					index, cmd, cmd1)
-			}
-			count += 1
-			cmd = cmd1
-		}
-	}
-	return count, cmd
-}*/
-
-// Wait for at least n servers to commit but don't wait forever.
-/*func (cfg *config) wait(index int, n int, startTerm int) interface{} {
-	to := 10 * time.Millisecond
-	for iters := 0; iters < 30; iters++ {
-		nd, _ := cfg.nCommitted(index)
-		if nd >= n {
-			break
-		}
-		time.Sleep(to)
-		if to < time.Second {
-			to *= 2
-		}
-		if startTerm > -1 {
-			for _, r := range cfg.rafts {
-				if t, _ := r.GetState(); t > startTerm {
-					// someone has moved on
-					// can no longer guarantee that we'll "win"
-					return -1
-				}
-			}
-		}
-	}
-	nd, cmd := cfg.nCommitted(index)
-	if nd < n {
-		cfg.t.Fatalf("only %d decided for index %d; wanted %d\n",
-			nd, index, n)
-	}
-	return cmd
-}*/
-
-// do a complete agreement.
-// it might choose the wrong leader initially,
-// and have to re-submit after giving up.
-// entirely gives up after about 10 seconds.
-// indirectly checks that the servers agree on the
-// same value, since nCommitted() checks this,
-// as do the threads that read from applyCh.
-// returns index.
-/*func (cfg *config) one(cmd int, expectedServers int) int {
-	t0 := time.Now()
-	starts := 0
-	for time.Since(t0).Seconds() < 10 {
-		// try all the servers, maybe one is the leader.
-		index := -1
-		for si := 0; si < cfg.n; si++ {
-			starts = (starts + 1) % cfg.n
-			var rf *Raft
-			cfg.mu.Lock()
-			if cfg.connected[starts] {
-				rf = cfg.rafts[starts]
-			}
-			cfg.mu.Unlock()
-			if rf != nil {
-				index1, _, ok := rf.Start(cmd)
-				if ok {
-					index = index1
-					break
-				}
-			}
-		}
-
-		if index != -1 {
-			// somebody claimed to be the leader and to have
-			// submitted our command; wait a while for agreement.
-			t1 := time.Now()
-			for time.Since(t1).Seconds() < 2 {
-				nd, cmd1 := cfg.nCommitted(index)
-				if nd > 0 && nd >= expectedServers {
-					// committed
-					if cmd2, ok := cmd1.(int); ok && cmd2 == cmd {
-						// and it was the command we submitted.
-						return index
-					}
-				}
-				time.Sleep(20 * time.Millisecond)
-			}
-		} else {
-			time.Sleep(50 * time.Millisecond)
-		}
-	}
-	cfg.t.Fatalf("one(%v) failed to reach agreement\n", cmd)
-	return -1
-}*/

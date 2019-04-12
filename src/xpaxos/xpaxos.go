@@ -16,12 +16,6 @@ const (
 	REPLY     = iota
 )
 
-type ClientRequest struct {
-	MsgType   int
-	Timestamp int
-	ClientId  int
-}
-
 type Message struct {
 	MsgType         int
 	MsgDigest       [16]byte
@@ -79,15 +73,40 @@ func digest(msg interface{}) [16]byte {
 func (xp *XPaxos) persist() {
     buf := new(bytes.Buffer)
     enc := gob.NewEncoder(buf)
-    //enc.Encode(xp_struct_var)
+    enc.Encode(0)
     data := buf.Bytes()
-    rf.persister.SaveRaftState(data)
+    xp.persister.SaveXPaxosState(data)
 }
 
 func (xp *XPaxos) readPersist(data []byte) {
     buf := bytes.NewBuffer(data)
     dec := gob.NewDecoder(buf)
-    //dec.Decode(&xp_struct_var)
+    dec.Decode(0)
+}
+
+
+
+//
+// ------------------------------ REPLICATE/REPLY RPC -----------------------------
+//
+
+type ReplicateReply struct {
+	Msg1 Message
+}
+
+func (xp *XPaxos) Replicate(args ClientRequest, reply *ReplicateReply) {
+	xp.mu.Lock()
+	defer xp.mu.Unlock()
+
+	xp.IssueCommit(2, args)
+
+	msg := Message {
+			MsgType:         REPLY,
+			PrepareSeqNum:   xp.prepareSeqNum,
+			View:            xp.view,
+			ClientTimestamp: args.Timestamp}
+
+	reply.Msg1 = msg
 }
 
 //
@@ -119,6 +138,8 @@ func (xp *XPaxos) Commit(args PrepareLogEntry, reply *CommitReply) {
 			Msg0:    args.Msg0,
 			Msg1:    msg}
 
+		xp.commitLog = append(xp.commitLog, entry);
+
 		reply.Msg1 = msg
 	}
 }
@@ -128,11 +149,11 @@ func (xp *XPaxos) IssueCommit(receiverId int, request ClientRequest) {
 	defer xp.mu.Unlock()
 
 	xp.prepareSeqNum++
-	digest := digest(request)
+	digest1 := digest(request)
 
 	msg := Message{
 		MsgType:         COMMIT,
-		MsgDigest:       digest,
+		MsgDigest:       digest1,
 		PrepareSeqNum:   xp.prepareSeqNum,
 		View:            xp.view,
 		ClientTimestamp: -1}
@@ -146,17 +167,18 @@ func (xp *XPaxos) IssueCommit(receiverId int, request ClientRequest) {
 	reply := CommitReply{}
 
 	if ok := xp.sendCommit(receiverId, prepareEntry, &reply); ok {
-		digest := digest(xp.prepareLog[xp.prepareSeqNum].Request)
+		digest2 := digest(xp.prepareLog[xp.prepareSeqNum].Request)
 
-		if bytes.Compare(reply.Msg1.MsgDigest[:], digest[:]) == 0 {
+		if bytes.Compare(reply.Msg1.MsgDigest[:], digest2[:]) == 0 {
 			commitEntry := CommitLogEntry{
 				Request: request,
 				Msg0:    msg,
 				Msg1:    reply.Msg1}
 
-			xp.commitLog = append(xp.commitLog)
+			xp.commitLog = append(xp.commitLog, commitEntry)
 
-			go xp.checkCommitLog()
+			xp.executeSeqNum++
+			// xp.checkCommitLog()
 		}
 	}
 }
@@ -181,7 +203,7 @@ func (xp *XPaxos) checkCommitLog() {
 //
 // ------------------------------- MAKE FUNCTION ------------------------------
 //
-func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister, applyCh chan ApplyMsg) *XPaxos {
+func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister) *XPaxos {
 	xp := &XPaxos{}
 
 	xp.mu.Lock()

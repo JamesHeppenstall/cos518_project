@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"labrpc"
 	"sync"
-	"time"
 )
 
 const CLIENT = 0
@@ -17,39 +16,42 @@ type Client struct {
 	replicas []*labrpc.ClientEnd
 }
 
-type ClientMsg struct {
-	Operation interface{}
+type ClientRequest struct {
+	MsgType   int
+	Timestamp int
+	ClientId  int
 }
 
-func (client *Client) Reply(args Args, reply *Reply) {
-	fmt.Printf("Hello World\n")
-}
 
-func (client *Client) sendRequest(server int, args Args, reply *Reply) bool {
-	ok := client.replicas[server].Call("XPaxos.PrintString", args, reply)
+func (client *Client) sendReplicate(server int, args ClientRequest, reply *ReplicateReply) bool {
+	ok := client.replicas[server].Call("XPaxos.Replicate", args, reply)
 	return ok
 }
 
-func MakeClient(replicas []*labrpc.ClientEnd, applyCh chan ClientMsg) *Client {
+func (client *Client) propose() {
+	msg := ClientRequest {
+		MsgType:   REPLICATE,
+		Timestamp: client.timestamp,
+		ClientId:  0}
+
+	reply := &ReplicateReply{}
+	client.sendReplicate(1, msg, reply)
+
+	client.timestamp++
+
+	fmt.Printf("%d %d \n", reply.Msg1.ClientTimestamp, client.timestamp)
+}
+
+
+func MakeClient(replicas []*labrpc.ClientEnd) *Client {
 	client := &Client{}
 
 	client.mu.Lock()
+	client.timestamp = 0
 	client.replicas = replicas
 	client.mu.Unlock()
 
-
-	go func() {
-		args := Args{}
-		args.Str = "Hello"
-
-		reply := Reply{}
-		if ok := client.sendRequest(1, args, &reply); ok {
-			time.Sleep(1 * time.Second)
-		}
-	}()
-
 	return client
-
 }
 
 func (xp *Client) Kill() {

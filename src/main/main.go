@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	servers := 3
+	servers := 4
 	xpaxos.MakeConfig(nil, servers, false)
 	time.Sleep(5 * time.Second)
 	//print(cfg)
