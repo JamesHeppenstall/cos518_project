@@ -95,9 +95,6 @@ type ReplicateReply struct {
 }
 
 func (xp *XPaxos) Replicate(args ClientRequest, reply *ReplicateReply) {
-	xp.mu.Lock()
-	defer xp.mu.Unlock()
-
 	xp.IssueCommit(2, args)
 
 	msg := Message {
@@ -167,7 +164,7 @@ func (xp *XPaxos) IssueCommit(receiverId int, request ClientRequest) {
 	reply := CommitReply{}
 
 	if ok := xp.sendCommit(receiverId, prepareEntry, &reply); ok {
-		digest2 := digest(xp.prepareLog[xp.prepareSeqNum].Request)
+		digest2 := digest(xp.prepareLog[xp.prepareSeqNum-1].Request)
 
 		if bytes.Compare(reply.Msg1.MsgDigest[:], digest2[:]) == 0 {
 			commitEntry := CommitLogEntry{

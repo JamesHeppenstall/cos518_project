@@ -33,7 +33,7 @@ func (client *Client) propose() {
 		MsgType:   REPLICATE,
 		Timestamp: client.timestamp,
 		ClientId:  0}
-
+		
 	reply := &ReplicateReply{}
 	client.sendReplicate(1, msg, reply)
 

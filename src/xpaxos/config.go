@@ -67,6 +67,7 @@ func MakeConfig(t *testing.T, n int, unreliable bool) *config {
 	}
 
 	cfg.client.propose()
+	cfg.client.propose()
 
 	return cfg
 }
