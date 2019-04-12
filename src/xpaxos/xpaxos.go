@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/json"
+    "encoding/gob"
 	"labrpc"
 	"sync"
 )
@@ -70,9 +71,23 @@ func (xp *XPaxos) GetState() (int, bool) {
 	return view, isLeader
 }
 
-func Digest(msg interface{}) [16]byte {
+func digest(msg interface{}) [16]byte {
 	jsonBytes, _ := json.Marshal(msg)
 	return md5.Sum(jsonBytes)
+}
+
+func (xp *XPaxos) persist() {
+    buf := new(bytes.Buffer)
+    enc := gob.NewEncoder(buf)
+    //enc.Encode(xp_struct_var)
+    data := buf.Bytes()
+    rf.persister.SaveRaftState(data)
+}
+
+func (xp *XPaxos) readPersist(data []byte) {
+    buf := bytes.NewBuffer(data)
+    dec := gob.NewDecoder(buf)
+    //dec.Decode(&xp_struct_var)
 }
 
 //
@@ -86,7 +101,7 @@ func (xp *XPaxos) Commit(args PrepareLogEntry, reply *CommitReply) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
 
-	digest := Digest(args.Request)
+	digest := digest(args.Request)
 
 	if args.Msg0.PrepareSeqNum == xp.prepareSeqNum+1 && bytes.Compare(args.Msg0.MsgDigest[:], digest[:]) == 0 {
 		xp.prepareSeqNum++
@@ -108,12 +123,12 @@ func (xp *XPaxos) Commit(args PrepareLogEntry, reply *CommitReply) {
 	}
 }
 
-func (xp *XPaxos) issueCommit(receiverId int, request ClientRequest) {
+func (xp *XPaxos) IssueCommit(receiverId int, request ClientRequest) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
 
 	xp.prepareSeqNum++
-	digest := Digest(request)
+	digest := digest(request)
 
 	msg := Message{
 		MsgType:         COMMIT,
@@ -131,7 +146,7 @@ func (xp *XPaxos) issueCommit(receiverId int, request ClientRequest) {
 	reply := CommitReply{}
 
 	if ok := xp.sendCommit(receiverId, prepareEntry, &reply); ok {
-		digest := Digest(xp.prepareLog[xp.prepareSeqNum].Request)
+		digest := digest(xp.prepareLog[xp.prepareSeqNum].Request)
 
 		if bytes.Compare(reply.Msg1.MsgDigest[:], digest[:]) == 0 {
 			commitEntry := CommitLogEntry{
@@ -146,6 +161,10 @@ func (xp *XPaxos) issueCommit(receiverId int, request ClientRequest) {
 	}
 }
 
+func (xp *XPaxos) sendCommit(receiverId int, args PrepareLogEntry, reply *CommitReply) bool {
+    return xp.replicas[receiverId].Call("XPaxos.Commit", args, reply)
+}
+
 func (xp *XPaxos) checkCommitLog() {
 	for {
 		xp.mu.Lock()
@@ -157,10 +176,6 @@ func (xp *XPaxos) checkCommitLog() {
 
 		xp.mu.Unlock()
 	}
-}
-
-func (xp *XPaxos) sendCommit(receiverId int, args PrepareLogEntry, reply *CommitReply) bool {
-	return xp.replicas[receiverId].Call("XPaxos.Commit", args, reply)
 }
 
 //
@@ -179,7 +194,9 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister, applyCh ch
 	xp.executeSeqNum = 0
 	xp.prepareLog = make([]PrepareLogEntry, 0)
 	xp.commitLog = make([]CommitLogEntry, 0)
-	xp.mu.Unlock()
+
+    xp.readPersist(persister.ReadXPaxosState())
+    xp.mu.Unlock()
 
 	return xp
 }

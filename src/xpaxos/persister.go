@@ -3,7 +3,7 @@ package xpaxos
 import "sync"
 
 type Persister struct {
-	mu        sync.Mutex
+	mu          sync.Mutex
 	xPaxosState []byte
 }
 
