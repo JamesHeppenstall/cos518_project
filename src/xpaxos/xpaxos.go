@@ -3,10 +3,11 @@ package xpaxos
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/gob"
 	"encoding/json"
-    "encoding/gob"
 	"labrpc"
 	"sync"
+	"time"
 )
 
 const (
@@ -15,25 +16,6 @@ const (
 	COMMIT    = iota
 	REPLY     = iota
 )
-
-type Message struct {
-	MsgType         int
-	MsgDigest       [16]byte
-	PrepareSeqNum   int
-	View            int
-	ClientTimestamp int
-}
-
-type PrepareLogEntry struct {
-	Request ClientRequest
-	Msg0    Message
-}
-
-type CommitLogEntry struct {
-	Request ClientRequest
-	Msg0    Message
-	Msg1    Message
-}
 
 type XPaxos struct {
 	mu               sync.Mutex
@@ -46,6 +28,25 @@ type XPaxos struct {
 	executeSeqNum    int
 	prepareLog       []PrepareLogEntry
 	commitLog        []CommitLogEntry
+}
+
+type Message struct {
+	MsgType         int
+	MsgDigest       [16]byte
+	PrepareSeqNum   int
+	View            int
+	ClientTimestamp int
+	ServerId        int // XPaxos server that created the message
+}
+
+type PrepareLogEntry struct {
+	Request ClientRequest
+	Msg0    Message
+}
+
+type CommitLogEntry struct {
+	Request ClientRequest
+	Msg0    map[int]Message
 }
 
 //
@@ -71,130 +72,160 @@ func digest(msg interface{}) [16]byte {
 }
 
 func (xp *XPaxos) persist() {
-    buf := new(bytes.Buffer)
-    enc := gob.NewEncoder(buf)
-    enc.Encode(0)
-    data := buf.Bytes()
-    xp.persister.SaveXPaxosState(data)
+	buf := new(bytes.Buffer)
+	enc := gob.NewEncoder(buf)
+	enc.Encode(0)
+	data := buf.Bytes()
+	xp.persister.SaveXPaxosState(data)
 }
 
 func (xp *XPaxos) readPersist(data []byte) {
-    buf := bytes.NewBuffer(data)
-    dec := gob.NewDecoder(buf)
-    dec.Decode(0)
+	buf := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(buf)
+	dec.Decode(0)
 }
 
-
-
 //
-// ------------------------------ REPLICATE/REPLY RPC -----------------------------
+// ---------------------------- REPLICATE/REPLY RPC ---------------------------
 //
+func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
+	xp.mu.Lock()
 
-type ReplicateReply struct {
-	Msg1 Message
-}
+	if xp.id == xp.view { // If XPaxos server is the leader
+		xp.prepareSeqNum++
+		msgDigest := digest(request)
 
-func (xp *XPaxos) Replicate(args ClientRequest, reply *ReplicateReply) {
-	xp.IssueCommit(2, args)
-
-	msg := Message {
-			MsgType:         REPLY,
+		msg := Message{
+			MsgType:         PREPARE,
+			MsgDigest:       msgDigest,
 			PrepareSeqNum:   xp.prepareSeqNum,
 			View:            xp.view,
-			ClientTimestamp: args.Timestamp}
+			ClientTimestamp: request.Timestamp,
+			ServerId:        xp.id}
 
-	reply.Msg1 = msg
+		prepareEntry := PrepareLogEntry{
+			Request: request,
+			Msg0:    msg}
+
+		xp.prepareLog = append(xp.prepareLog, prepareEntry)
+
+		msgMap := make(map[int]Message, 0)
+		msgMap[xp.id] = msg // Leader's prepare message
+
+		commitEntry := CommitLogEntry{
+			Request: request,
+			Msg0:    msgMap}
+
+		xp.commitLog = append(xp.commitLog, commitEntry)
+		replyCh := make(chan bool, len(xp.synchronousGroup)-1)
+		xp.mu.Unlock()
+
+		for server, _ := range xp.replicas {
+			if server != CLIENT && server != xp.id {
+				go xp.issuePrepare(server, prepareEntry, replyCh)
+			}
+		}
+
+		for i := 0; i < len(xp.synchronousGroup)-1; i++ {
+			<-replyCh
+		}
+
+		reply.Success = true
+	} else {
+		xp.mu.Unlock()
+		reply.Success = false
+	}
+}
+
+//
+// -------------------------------- PREPARE RPC -------------------------------
+//
+type PrepareReply struct {
+	Success bool
+}
+
+func (xp *XPaxos) sendPrepare(server int, prepareEntry PrepareLogEntry, reply *PrepareReply) bool {
+	DPrintf("Prepare: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
+	return xp.replicas[server].Call("XPaxos.Prepare", prepareEntry, reply)
+}
+
+func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh chan bool) {
+	reply := &PrepareReply{}
+
+	if ok := xp.sendPrepare(server, prepareEntry, reply); ok {
+		if reply.Success == true {
+			replyCh <- reply.Success
+		}
+	}
+}
+
+func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *PrepareReply) {
+	//xp.mu.Lock()
+	//defer xp.mu.Unlock()
+
+	msgDigest := digest(prepareEntry.Request)
+
+	if prepareEntry.Msg0.PrepareSeqNum == xp.prepareSeqNum+1 && bytes.Compare(prepareEntry.Msg0.MsgDigest[:], msgDigest[:]) == 0 {
+		xp.prepareSeqNum++
+		xp.prepareLog = append(xp.prepareLog, prepareEntry)
+
+		msg := Message{
+			MsgType:         COMMIT,
+			MsgDigest:       msgDigest,
+			PrepareSeqNum:   xp.prepareSeqNum,
+			View:            xp.view,
+			ClientTimestamp: prepareEntry.Request.Timestamp,
+			ServerId:        xp.id}
+
+		if xp.executeSeqNum >= len(xp.commitLog) {
+			msgMap := make(map[int]Message, 0)
+			msgMap[xp.view] = prepareEntry.Msg0 // Leader's prepare message
+			msgMap[xp.id] = msg                 // Follower's commit message
+
+			commitEntry := CommitLogEntry{
+				Request: prepareEntry.Request,
+				Msg0:    msgMap}
+
+			xp.commitLog = append(xp.commitLog, commitEntry)
+		}
+
+		for server, _ := range xp.replicas {
+			if server != CLIENT && server != xp.id {
+				go xp.issueCommit(server, msg)
+			}
+		}
+
+		time.Sleep(50 * time.Millisecond)
+
+		if len(xp.commitLog[xp.executeSeqNum].Msg0) == len(xp.synchronousGroup) {
+			xp.executeSeqNum++
+			reply.Success = true
+		}
+	}
 }
 
 //
 // --------------------------------- COMMIT RPC --------------------------------
 //
 type CommitReply struct {
-	Msg1 Message
+	Success bool
 }
 
-func (xp *XPaxos) Commit(args PrepareLogEntry, reply *CommitReply) {
-	xp.mu.Lock()
-	defer xp.mu.Unlock()
+func (xp *XPaxos) sendCommit(server int, msg Message, reply *CommitReply) bool {
+	DPrintf("Commit: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
+	return xp.replicas[server].Call("XPaxos.Commit", msg, reply)
+}
 
-	digest := digest(args.Request)
+func (xp *XPaxos) issueCommit(server int, msg Message) {
+	reply := &CommitReply{}
 
-	if args.Msg0.PrepareSeqNum == xp.prepareSeqNum+1 && bytes.Compare(args.Msg0.MsgDigest[:], digest[:]) == 0 {
-		xp.prepareSeqNum++
-		xp.executeSeqNum++
-
-		msg := Message{
-			MsgType:         COMMIT,
-			MsgDigest:       digest,
-			PrepareSeqNum:   xp.prepareSeqNum,
-			View:            xp.view,
-			ClientTimestamp: args.Request.Timestamp}
-
-		entry := CommitLogEntry{
-			Request: args.Request,
-			Msg0:    args.Msg0,
-			Msg1:    msg}
-
-		xp.commitLog = append(xp.commitLog, entry);
-
-		reply.Msg1 = msg
+	if ok := xp.sendCommit(server, msg, reply); ok {
 	}
 }
 
-func (xp *XPaxos) IssueCommit(receiverId int, request ClientRequest) {
-	xp.mu.Lock()
-	defer xp.mu.Unlock()
-
-	xp.prepareSeqNum++
-	digest1 := digest(request)
-
-	msg := Message{
-		MsgType:         COMMIT,
-		MsgDigest:       digest1,
-		PrepareSeqNum:   xp.prepareSeqNum,
-		View:            xp.view,
-		ClientTimestamp: -1}
-
-	prepareEntry := PrepareLogEntry{
-		Request: request,
-		Msg0:    msg}
-
-	xp.prepareLog = append(xp.prepareLog, prepareEntry)
-
-	reply := CommitReply{}
-
-	if ok := xp.sendCommit(receiverId, prepareEntry, &reply); ok {
-		digest2 := digest(xp.prepareLog[xp.prepareSeqNum-1].Request)
-
-		if bytes.Compare(reply.Msg1.MsgDigest[:], digest2[:]) == 0 {
-			commitEntry := CommitLogEntry{
-				Request: request,
-				Msg0:    msg,
-				Msg1:    reply.Msg1}
-
-			xp.commitLog = append(xp.commitLog, commitEntry)
-
-			xp.executeSeqNum++
-			// xp.checkCommitLog()
-		}
-	}
-}
-
-func (xp *XPaxos) sendCommit(receiverId int, args PrepareLogEntry, reply *CommitReply) bool {
-    return xp.replicas[receiverId].Call("XPaxos.Commit", args, reply)
-}
-
-func (xp *XPaxos) checkCommitLog() {
-	for {
-		xp.mu.Lock()
-
-		if len(xp.commitLog) > xp.executeSeqNum+1 {
-			xp.executeSeqNum++
-			return
-		}
-
-		xp.mu.Unlock()
-	}
+func (xp *XPaxos) Commit(msg Message, reply *CommitReply) {
+	serverId := msg.ServerId
+	xp.commitLog[xp.executeSeqNum].Msg0[serverId] = msg
 }
 
 //
@@ -206,7 +237,7 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister) *XPaxos {
 	xp.mu.Lock()
 	xp.persister = persister
 	xp.replicas = replicas
-	xp.synchronousGroup = replicas
+	xp.synchronousGroup = replicas[1:]
 	xp.id = id
 	xp.view = 1
 	xp.prepareSeqNum = 0
@@ -214,11 +245,10 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister) *XPaxos {
 	xp.prepareLog = make([]PrepareLogEntry, 0)
 	xp.commitLog = make([]CommitLogEntry, 0)
 
-    xp.readPersist(persister.ReadXPaxosState())
-    xp.mu.Unlock()
+	xp.readPersist(persister.ReadXPaxosState())
+	xp.mu.Unlock()
 
 	return xp
 }
 
-func (xp *XPaxos) Kill() {
-}
+func (xp *XPaxos) Kill() {}

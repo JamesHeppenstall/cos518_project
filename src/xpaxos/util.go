@@ -2,11 +2,18 @@ package xpaxos
 
 import "log"
 
-// Debugging
-const Debug = 0
+// Debugging (0 = None, 1 = Info, 2 = Debug)
+const DEBUG = 2
 
 func DPrintf(format string, a ...interface{}) (n int, err error) {
-	if Debug > 0 {
+	if DEBUG > 1 {
+		log.Printf(format, a...)
+	}
+	return
+}
+
+func IPrintf(format string, a ...interface{}) (n int, err error) {
+	if DEBUG > 0 {
 		log.Printf(format, a...)
 	}
 	return

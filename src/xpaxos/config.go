@@ -1,15 +1,16 @@
 package xpaxos
 
-import "labrpc"
+import (
+	crand "crypto/rand"
+	"encoding/base64"
+	"labrpc"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"testing"
+)
 
-//import "log"
-import "sync"
-import "testing"
-import "runtime"
-import crand "crypto/rand"
-import "encoding/base64"
-import "sync/atomic"
-
+const CLIENT = 0 // Client ID is always set to zero - DO NOT CHANGE
 
 func randstring(n int) string {
 	b := make([]byte, 2*n)
@@ -22,7 +23,7 @@ type config struct {
 	mu        sync.Mutex
 	t         *testing.T
 	net       *labrpc.Network
-	n         int
+	n         int   // Total number of client and XPaxos servers
 	done      int32 // Tell internal threads to die
 	xpServers []*XPaxos
 	client    *Client
@@ -33,7 +34,7 @@ type config struct {
 	logs      []map[int]int // Copy of each server's committed entries
 }
 
-func MakeConfig(t *testing.T, n int, unreliable bool) *config {
+func makeConfig(t *testing.T, n int, unreliable bool) *config {
 	runtime.GOMAXPROCS(4)
 	cfg := &config{}
 	cfg.t = t
@@ -51,9 +52,9 @@ func MakeConfig(t *testing.T, n int, unreliable bool) *config {
 
 	cfg.net.LongDelays(false)
 
-
-	cfg.logs[0] = map[int]int{}
-	cfg.startClient(0)
+	// Create client server
+	cfg.logs[CLIENT] = map[int]int{}
+	cfg.startClient()
 
 	// Create a full set of XPaxos servers
 	for i := 1; i < cfg.n; i++ {
@@ -66,21 +67,23 @@ func MakeConfig(t *testing.T, n int, unreliable bool) *config {
 		cfg.connect(i)
 	}
 
-	cfg.client.propose()
-	cfg.client.propose()
-
 	return cfg
 }
 
 // Shut down an XPaxos server but save its persistent state
 func (cfg *config) crash1(i int) {
+	if i == CLIENT {
+		DPrintf("Cannot call crash1() on client server; must call crashClient()")
+		return
+	}
+
 	cfg.disconnect(i)
 	cfg.net.DeleteServer(i) // Disable client connections to the server
 
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
 
-	// A fresh persister, in case old instance continues to update the Persister
+	// A fresh persister, in case the old instance continues to update the Persister
 	// Copy old persister's content so that we always pass Make() the last persisted state
 	if cfg.saved[i] != nil {
 		cfg.saved[i] = cfg.saved[i].Copy()
@@ -101,11 +104,15 @@ func (cfg *config) crash1(i int) {
 	}
 }
 
-// Start or re-start an XPaxos server
-// If one already exists, "kill" it first
+// Start or re-start an XPaxos server; if one already exists, "kill" it first
 // Allocate new outgoing port file names, and a new state persister, to isolate previous instance of
-// this server. since we cannot really kill it
+// this server since we cannot really kill it
 func (cfg *config) start1(i int) {
+	if i == CLIENT {
+		DPrintf("Cannot call start1() on client server; must call startClient()")
+		return
+	}
+
 	cfg.crash1(i)
 
 	// A fresh set of outgoing ClientEnd names so that old crashed instance's ClientEnds can't send
@@ -145,42 +152,10 @@ func (cfg *config) start1(i int) {
 	cfg.net.AddServer(i, srv)
 }
 
-// Start or re-start an XPaxos Client
-// If one already exists, "kill" it first
-// Allocate new outgoing port file names, and a new state persister, to isolate previous instance of
-// this server. since we cannot really kill it
-func (cfg *config) startClient(i int) {
-	cfg.crashClient(i)
-
-	// A fresh set of outgoing ClientEnd names so that old crashed instance's ClientEnds can't send
-	cfg.endnames[i] = make([]string, cfg.n)
-	for j := 0; j < cfg.n; j++ {
-		cfg.endnames[i][j] = randstring(20)
-	}
-
-	// A fresh set of ClientEnds
-	ends := make([]*labrpc.ClientEnd, cfg.n)
-	for j := 0; j < cfg.n; j++ {
-		ends[j] = cfg.net.MakeEnd(cfg.endnames[i][j])
-		cfg.net.Connect(cfg.endnames[i][j], j)
-	}
-
-	client := MakeClient(ends)
-
-	cfg.mu.Lock()
-	cfg.client = client
-	cfg.mu.Unlock()
-
-	svc := labrpc.MakeService(cfg.client)
-	srv := labrpc.MakeServer()
-	srv.AddService(svc)
-	cfg.net.AddServer(CLIENT, srv)
-}
-
-// Shut down an XPaxos client
-func (cfg *config) crashClient(i int) {
-	cfg.disconnect(i)
-	cfg.net.DeleteServer(i) // Disable client connections to the server
+// Shut down the client server
+func (cfg *config) crashClient() {
+	cfg.disconnect(CLIENT)
+	cfg.net.DeleteServer(CLIENT) // Disable client connections to the server
 
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
@@ -194,21 +169,66 @@ func (cfg *config) crashClient(i int) {
 	}
 }
 
+// Start or re-start the client server; if one already exists, "kill" it first
+// Allocate new outgoing port file names to isolate previous instance of this client since we cannot
+// really kill it
+func (cfg *config) startClient() {
+	cfg.crashClient()
+
+	// A fresh set of outgoing ClientEnd names so that old crashed instance's ClientEnds can't send
+	cfg.endnames[CLIENT] = make([]string, cfg.n)
+	for j := 0; j < cfg.n; j++ {
+		cfg.endnames[CLIENT][j] = randstring(20)
+	}
+
+	// A fresh set of ClientEnds
+	ends := make([]*labrpc.ClientEnd, cfg.n)
+	for j := 0; j < cfg.n; j++ {
+		ends[j] = cfg.net.MakeEnd(cfg.endnames[CLIENT][j])
+		cfg.net.Connect(cfg.endnames[CLIENT][j], j)
+	}
+
+	// The client server doesn't maintain a persistent state
+	cfg.mu.Lock()
+	cfg.saved[CLIENT] = nil
+	cfg.mu.Unlock()
+
+	client := MakeClient(ends)
+
+	cfg.mu.Lock()
+	cfg.client = client
+	cfg.mu.Unlock()
+
+	svc := labrpc.MakeService(cfg.client)
+	srv := labrpc.MakeServer()
+	srv.AddService(svc)
+	cfg.net.AddServer(CLIENT, srv)
+}
+
 func (cfg *config) cleanup() {
+	if cfg.client != nil {
+		cfg.client.Kill()
+	}
+
 	for i := 1; i < cfg.n; i++ {
 		if cfg.xpServers[i] != nil {
 			cfg.xpServers[i].Kill()
 		}
 	}
-	if cfg.client != nil {
-		cfg.client.Kill()
-	}
 
 	atomic.StoreInt32(&cfg.done, 1)
 }
 
-// Attach server i to the net.
+// Connect server i to the network
 func (cfg *config) connect(i int) {
+	if cfg.connected[i] == false {
+		if i == CLIENT {
+			DPrintf("Connected: client server (%d)\n", i)
+		} else {
+			DPrintf("Connected: XPaxos server (%d)\n", i)
+		}
+	}
+
 	cfg.connected[i] = true
 
 	// Outgoing ClientEnds
@@ -228,9 +248,15 @@ func (cfg *config) connect(i int) {
 	}
 }
 
-// Detach server i from the net.
+// Disconnect server i from the network
 func (cfg *config) disconnect(i int) {
-	// fmt.Printf("disconnect(%d)\n", i)
+	if cfg.connected[i] == true {
+		if i == CLIENT {
+			DPrintf("Disconnected: client server (%d)\n", i)
+		} else {
+			DPrintf("Disconnected: XPaxos server (%d)\n", i)
+		}
+	}
 
 	cfg.connected[i] = false
 
@@ -262,17 +288,3 @@ func (cfg *config) setUnreliable(unrel bool) {
 func (cfg *config) setLongReordering(longrel bool) {
 	cfg.net.LongReordering(longrel)
 }
-
-
-// Check that there's no leader
-func (cfg *config) checkNoLeader() {
-	for i := 0; i < cfg.n; i++ {
-		if cfg.connected[i] {
-			_, isLeader := cfg.xpServers[i].GetState()
-			if isLeader {
-				cfg.t.Fatalf("expected no leader, but %v claims to be leader\n", i)
-			}
-		}
-	}
-}
-

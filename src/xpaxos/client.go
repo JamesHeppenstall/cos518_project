@@ -1,58 +1,91 @@
 package xpaxos
 
 import (
-	"fmt"
 	"labrpc"
 	"sync"
+	"time"
 )
 
-const CLIENT = 0
+const TIMEOUT = 1000 // Timeout period (in milliseconds) for Propose()
 
-// A Go object implementing a single XPaxos peer
 type Client struct {
 	mu        sync.Mutex
+	replicas  []*labrpc.ClientEnd
 	timestamp int
-	// stats     stat_t
-	replicas []*labrpc.ClientEnd
+	// Must include statistics for evaluation
 }
 
 type ClientRequest struct {
 	MsgType   int
 	Timestamp int
+	Operation interface{}
 	ClientId  int
 }
 
-
-func (client *Client) sendReplicate(server int, args ClientRequest, reply *ReplicateReply) bool {
-	ok := client.replicas[server].Call("XPaxos.Replicate", args, reply)
-	return ok
+//
+// ---------------------------- REPLICATE/REPLY RPC ---------------------------
+//
+type ReplicateReply struct {
+	Success bool
 }
 
-func (client *Client) propose() {
-	msg := ClientRequest {
+func (client *Client) sendReplicate(server int, request ClientRequest, reply *ReplicateReply) bool {
+	DPrintf("Replicate: from client server (%d) to XPaxos server (%d)\n", CLIENT, server)
+	return client.replicas[server].Call("XPaxos.Replicate", request, reply)
+}
+
+func (client *Client) issueReplicate(server int, request ClientRequest, replyCh chan ReplicateReply) {
+	reply := &ReplicateReply{}
+
+	if ok := client.sendReplicate(server, request, reply); ok {
+		if reply.Success == true { // Only the leader should reply to client server
+			replyCh <- *reply
+		}
+	}
+}
+
+func (client *Client) Propose(op interface{}) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
+	request := ClientRequest{
 		MsgType:   REPLICATE,
 		Timestamp: client.timestamp,
-		ClientId:  0}
-		
-	reply := &ReplicateReply{}
-	client.sendReplicate(1, msg, reply)
+		Operation: op,
+		ClientId:  CLIENT}
+
+	replyCh := make(chan ReplicateReply)
+
+	for server, _ := range client.replicas {
+		if server != CLIENT {
+			go client.issueReplicate(server, request, replyCh)
+		}
+	}
+
+	timer := time.NewTimer(TIMEOUT * time.Millisecond).C
+
+	select {
+	case <-timer:
+		IPrintf("Timeout: client server (%d)\n", CLIENT)
+	case <-replyCh:
+		IPrintf("Success: committed request (%d)\n", client.timestamp)
+	}
 
 	client.timestamp++
-
-	fmt.Printf("%d %d \n", reply.Msg1.ClientTimestamp, client.timestamp)
 }
 
-
+//
+// ------------------------------- MAKE FUNCTION ------------------------------
+//
 func MakeClient(replicas []*labrpc.ClientEnd) *Client {
 	client := &Client{}
 
 	client.mu.Lock()
-	client.timestamp = 0
 	client.replicas = replicas
+	client.timestamp = 0
 	client.mu.Unlock()
 
 	return client
 }
 
-func (xp *Client) Kill() {
-}
+func (client *Client) Kill() {}
