@@ -21,7 +21,7 @@ type XPaxos struct {
 	mu               sync.Mutex
 	persister        *Persister
 	replicas         []*labrpc.ClientEnd
-	synchronousGroup []*labrpc.ClientEnd
+	synchronousGroup map[int]bool
 	id               int
 	view             int
 	prepareSeqNum    int
@@ -237,7 +237,12 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister) *XPaxos {
 	xp.mu.Lock()
 	xp.persister = persister
 	xp.replicas = replicas
-	xp.synchronousGroup = replicas[1:]
+	xp.synchronousGroup = make(map[int]bool)
+	for k, _ := range xp.replicas {
+		if k != CLIENT {
+			xp.synchronousGroup[k] = true
+		}
+	}
 	xp.id = id
 	xp.view = 1
 	xp.prepareSeqNum = 0
