@@ -2,6 +2,7 @@ package xpaxos
 
 import (
 	crand "crypto/rand"
+	"crypto/rsa"
 	"encoding/base64"
 	"labrpc"
 	"runtime"
@@ -20,16 +21,18 @@ func randstring(n int) string {
 }
 
 type config struct {
-	mu        sync.Mutex
-	t         *testing.T
-	net       *labrpc.Network
-	n         int   // Total number of client and XPaxos servers
-	done      int32 // Tell internal threads to die
-	xpServers []*XPaxos
-	client    *Client
-	connected []bool   // Whether each server is on the net
-	saved     []*Persister
-	endnames  [][]string    // The port file names each sends to
+	mu          sync.Mutex
+	t           *testing.T
+	net         *labrpc.Network
+	n           int   // Total number of client and XPaxos servers
+	done        int32 // Tell internal threads to die
+	xpServers   []*XPaxos
+	client      *Client
+	connected   []bool // Whether each server is on the net
+	saved       []*Persister
+	endnames    [][]string // The port file names each sends to
+	privateKeys map[int]*rsa.PrivateKey
+	publicKeys  map[int]*rsa.PublicKey
 }
 
 func makeConfig(t *testing.T, n int, unreliable bool) *config {
@@ -43,6 +46,8 @@ func makeConfig(t *testing.T, n int, unreliable bool) *config {
 	cfg.connected = make([]bool, cfg.n)
 	cfg.saved = make([]*Persister, cfg.n)
 	cfg.endnames = make([][]string, cfg.n)
+	cfg.privateKeys = make(map[int]*rsa.PrivateKey, cfg.n)
+	cfg.publicKeys = make(map[int]*rsa.PublicKey, cfg.n)
 
 	cfg.setUnreliable(unreliable)
 
@@ -122,6 +127,11 @@ func (cfg *config) start1(i int) {
 		cfg.net.Connect(cfg.endnames[i][j], j)
 	}
 
+	// A fresh pair of RSA private/public keys
+	privateKey, publicKey := generateKeys()
+	cfg.privateKeys[i] = privateKey
+	cfg.publicKeys[i] = publicKey
+
 	cfg.mu.Lock()
 
 	// A fresh persister, so old instance doesn't overwrite new instance's persisted state
@@ -134,7 +144,7 @@ func (cfg *config) start1(i int) {
 
 	cfg.mu.Unlock()
 
-	xp := Make(ends, i, cfg.saved[i])
+	xp := Make(ends, i, cfg.saved[i], cfg.privateKeys[i], cfg.publicKeys)
 
 	cfg.mu.Lock()
 	cfg.xpServers[i] = xp
