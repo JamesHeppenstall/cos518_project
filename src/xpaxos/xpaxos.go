@@ -7,6 +7,7 @@ import (
     "encoding/gob"
 	"labrpc"
 	"sync"
+	"time"
 )
 
 const (
@@ -51,7 +52,7 @@ type CommitLogEntry struct {
 //
 // ------------------------------ HELPER FUNCTIONS -----------------------------
 //
-func (xp *XPaxos) GetState() (int, bool) {
+func (xp *XPaxos) getState() (int, bool) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
 
@@ -90,6 +91,8 @@ func (xp *XPaxos) readPersist(data []byte) {
 func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 	if xp.id == xp.view { // If XPaxos server is the leader
 		xp.mu.Lock()
+		defer xp.mu.Unlock()
+
 		xp.prepareSeqNum++
 		msgDigest := digest(request)
 
@@ -118,8 +121,8 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 		replyCh := make(chan bool, len(xp.synchronousGroup)-1)
 		xp.mu.Unlock()
 
-		for server, _ := range xp.replicas {
-			if server != CLIENT && server != xp.id {
+		for server, _ := range xp.synchronousGroup {
+			if server != xp.id {
 				go xp.issuePrepare(server, prepareEntry, replyCh)
 			}
 		}
@@ -128,6 +131,8 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 			<-replyCh
 		}
 
+		xp.mu.Lock()
+		xp.executeSeqNum++
 		reply.Success = true 
 	} else {
 		reply.Success = false
@@ -152,12 +157,16 @@ func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh
 	if ok := xp.sendPrepare(server, prepareEntry, reply); ok {
 		if reply.Success == true {
 			replyCh <- reply.Success
+		} else {
+			go xp.issuePrepare(server, prepareEntry, replyCh)
 		}
 	}
 }
 
 func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *PrepareReply) {
 	xp.mu.Lock()
+	defer xp.mu.Unlock()
+
 	msgDigest := digest(prepareEntry.Request)
 
 	if prepareEntry.Msg0.PrepareSeqNum == xp.prepareSeqNum+1 && bytes.Compare(prepareEntry.Msg0.MsgDigest[:], msgDigest[:]) == 0 {
@@ -187,8 +196,8 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *PrepareReply) {
 		replyCh := make(chan bool, len(xp.synchronousGroup)-1)
 		xp.mu.Unlock()
 
-		for server, _ := range xp.replicas {
-			if server != CLIENT && server != xp.id {
+		for server, _ := range xp.synchronousGroup {
+			if server != xp.id {
 				go xp.issueCommit(server, msg, replyCh)
 			}
 		}
@@ -198,13 +207,18 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *PrepareReply) {
 		}
 
 		xp.mu.Lock()
-		if len(xp.commitLog[xp.executeSeqNum].Msg0) == len(xp.synchronousGroup) {
-			xp.executeSeqNum++
-			reply.Success = true
-		}
-	}
 
-	xp.mu.Unlock()
+		for len(xp.commitLog[xp.executeSeqNum].Msg0) != len(xp.synchronousGroup) {
+			xp.mu.Unlock()
+			time.Sleep(10 * time.Millisecond)
+			xp.mu.Lock()
+		}
+
+		xp.executeSeqNum++
+		reply.Success = true
+	} else {
+		reply.Success = false
+	}
 }
 
 //
@@ -224,7 +238,7 @@ func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
 
 	if ok := xp.sendCommit(server, msg, reply); ok {
 		if reply.Success == true {
-			replyCh <- reply.Success
+			replyCh <- true
 		} else {
 			go xp.issueCommit(server, msg, replyCh)
 		}
@@ -233,16 +247,15 @@ func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
 
 func (xp *XPaxos) Commit(msg Message, reply *CommitReply) {
 	xp.mu.Lock()
-	
-	if xp.executeSeqNum > len(xp.commitLog) {
-		reply.Success = false
-	} else {
+	defer xp.mu.Unlock()
+
+	if xp.executeSeqNum < len(xp.commitLog) {
 		serverId := msg.ServerId
 		xp.commitLog[xp.executeSeqNum].Msg0[serverId] = msg
 		reply.Success = true
+	} else {
+		reply.Success = false
 	}
-
-	xp.mu.Unlock()
 }
 
 //
@@ -254,18 +267,19 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister) *XPaxos {
 	xp.mu.Lock()
 	xp.persister = persister
 	xp.replicas = replicas
-	xp.synchronousGroup = make(map[int]bool)
-	for k, _ := range xp.replicas {
-		if k != CLIENT {
-			xp.synchronousGroup[k] = true
-		}
-	}
+	xp.synchronousGroup = make(map[int]bool, 0)
 	xp.id = id
 	xp.view = 1
 	xp.prepareSeqNum = 0
 	xp.executeSeqNum = 0
 	xp.prepareLog = make([]PrepareLogEntry, 0)
 	xp.commitLog = make([]CommitLogEntry, 0)
+
+	for server, _ := range xp.replicas {
+		if server != CLIENT {
+			xp.synchronousGroup[server] = true
+		}
+	}
 
     xp.readPersist(persister.ReadXPaxosState())
     xp.mu.Unlock()

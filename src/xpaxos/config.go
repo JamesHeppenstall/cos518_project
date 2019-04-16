@@ -27,11 +27,9 @@ type config struct {
 	done      int32 // Tell internal threads to die
 	xpServers []*XPaxos
 	client    *Client
-	applyErr  []string // From apply channel readers
 	connected []bool   // Whether each server is on the net
 	saved     []*Persister
 	endnames  [][]string    // The port file names each sends to
-	logs      []map[int]int // Copy of each server's committed entries
 }
 
 func makeConfig(t *testing.T, n int, unreliable bool) *config {
@@ -40,25 +38,21 @@ func makeConfig(t *testing.T, n int, unreliable bool) *config {
 	cfg.t = t
 	cfg.net = labrpc.MakeNetwork()
 	cfg.n = n
-	cfg.applyErr = make([]string, cfg.n)
 	cfg.xpServers = make([]*XPaxos, cfg.n)
 	cfg.client = &Client{}
 	cfg.connected = make([]bool, cfg.n)
 	cfg.saved = make([]*Persister, cfg.n)
 	cfg.endnames = make([][]string, cfg.n)
-	cfg.logs = make([]map[int]int, cfg.n)
 
 	cfg.setUnreliable(unreliable)
 
 	cfg.net.LongDelays(false)
 
 	// Create client server
-	cfg.logs[CLIENT] = map[int]int{}
 	cfg.startClient()
 
 	// Create a full set of XPaxos servers
 	for i := 1; i < cfg.n; i++ {
-		cfg.logs[i] = map[int]int{}
 		cfg.start1(i)
 	}
 
