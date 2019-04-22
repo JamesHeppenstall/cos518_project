@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const BITSIZE = 1024 // RSA private key bit size
-
 const (
 	REPLICATE = iota
 	PREPARE   = iota
@@ -57,6 +55,12 @@ type CommitLogEntry struct {
 //
 func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 	if xp.id == xp.view { // If XPaxos server is the leader
+		if len(xp.prepareLog) > 0 && request.Timestamp <= xp.prepareLog[len(xp.prepareLog)-1].Msg0.ClientTimestamp {
+			reply.IsLeader = true
+			reply.Success = false
+			return
+		}
+
 		xp.mu.Lock()
 		xp.prepareSeqNum++
 		msgDigest := digest(request)
@@ -71,20 +75,12 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 			ClientTimestamp: request.Timestamp,
 			ServerId:        xp.id}
 
-		prepareEntry := PrepareLogEntry{
-			Request: request,
-			Msg0:    msg}
-
-		xp.prepareLog = append(xp.prepareLog, prepareEntry)
+		prepareEntry := xp.appendToPrepareLog(request, msg)
 
 		msgMap := make(map[int]Message, 0)
 		msgMap[xp.id] = msg // Leader's prepare message
+		xp.appendToCommitLog(request, msgMap)
 
-		commitEntry := CommitLogEntry{
-			Request: request,
-			Msg0:    msgMap}
-
-		xp.commitLog = append(xp.commitLog, commitEntry)
 		replyCh := make(chan bool, len(xp.synchronousGroup)-1)
 		xp.mu.Unlock()
 
@@ -165,12 +161,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *PrepareReply) {
 			msgMap := make(map[int]Message, 0)
 			msgMap[xp.view] = prepareEntry.Msg0 // Leader's prepare message
 			msgMap[xp.id] = msg                 // Follower's commit message
-
-			commitEntry := CommitLogEntry{
-				Request: prepareEntry.Request,
-				Msg0:    msgMap}
-
-			xp.commitLog = append(xp.commitLog, commitEntry)
+			xp.appendToCommitLog(prepareEntry.Request, msgMap)
 		}
 
 		replyCh := make(chan bool, len(xp.synchronousGroup)-1)

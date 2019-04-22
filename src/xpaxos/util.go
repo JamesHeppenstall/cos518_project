@@ -12,7 +12,8 @@ import (
 	"math/rand"
 )
 
-const DEBUG = 2 // Debugging (0 = None, 1 = Info, 2 = Debug)
+const DEBUG = 2      // Debugging (0 = None, 1 = Info, 2 = Debug)
+const BITSIZE = 1024 // RSA private key bit size
 
 //
 // ------------------------------ DEBUG FUNCTIONS -----------------------------
@@ -39,7 +40,7 @@ func checkError(err error) {
 }
 
 //
-// ------------------------------ HELPER FUNCTIONS ----------------------------
+// ------------------------------ CRYPTO FUNCTIONS ----------------------------
 //
 func digest(msg interface{}) [32]byte { // Crypto message digest
 	jsonBytes, _ := json.Marshal(msg)
@@ -66,6 +67,9 @@ func (xp *XPaxos) verify(server int, msgDigest [32]byte, signature []byte) bool 
 	return true
 }
 
+//
+// ------------------------------ HELPER FUNCTIONS ----------------------------
+//
 func (xp *XPaxos) getState() (int, bool) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
@@ -96,6 +100,23 @@ func (xp *XPaxos) generateSynchronousGroup(seed int64) {
 	if xp.synchronousGroup[xp.id] != true {
 		xp.synchronousGroup = make(map[int]bool, 0)
 	}
+}
+
+func (xp *XPaxos) appendToPrepareLog(request ClientRequest, msg Message) PrepareLogEntry {
+	prepareEntry := PrepareLogEntry{
+		Request: request,
+		Msg0:    msg}
+
+	xp.prepareLog = append(xp.prepareLog, prepareEntry)
+	return prepareEntry
+}
+
+func (xp *XPaxos) appendToCommitLog(request ClientRequest, msgMap map[int]Message) {
+	commitEntry := CommitLogEntry{
+		Request: request,
+		Msg0:    msgMap}
+
+	xp.commitLog = append(xp.commitLog, commitEntry)
 }
 
 func (xp *XPaxos) persist() {
