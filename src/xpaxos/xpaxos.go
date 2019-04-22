@@ -1,11 +1,11 @@
 package xpaxos
 
 import (
+	"bytes"
+	"crypto/rsa"
 	"labrpc"
 	"sync"
 	"time"
-	"crypto/rsa"
-	"bytes"
 )
 
 const BITSIZE = 1024 // RSA private key bit size

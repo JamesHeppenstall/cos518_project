@@ -1,8 +1,8 @@
 package xpaxos
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 )
 
 func TestCommonCase1(t *testing.T) {
