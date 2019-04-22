@@ -3,7 +3,7 @@ package xpaxos
 import (
 	"bytes"
 	"crypto"
-	"crypto/rand"
+	crand "crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/gob"
@@ -12,8 +12,10 @@ import (
 	"log"
 	"sync"
 	"time"
+	"math/rand"
 )
 
+//const DELTA = 100    // Synchronous group time frame delta (in milliseconds)
 const BITSIZE = 1024 // RSA private key bit size
 
 const (
@@ -73,13 +75,13 @@ func digest(msg interface{}) [32]byte { // Crypto message digest
 }
 
 func generateKeys() (*rsa.PrivateKey, *rsa.PublicKey) { // Crypto RSA private/public key generation
-	key, err := rsa.GenerateKey(rand.Reader, BITSIZE)
+	key, err := rsa.GenerateKey(crand.Reader, BITSIZE)
 	checkError(err)
 	return key, &key.PublicKey
 }
 
 func (xp *XPaxos) sign(msgDigest [32]byte) []byte { // Crypto message signature
-	signature, err := rsa.SignPKCS1v15(rand.Reader, xp.privateKey, crypto.SHA256, msgDigest[:])
+	signature, err := rsa.SignPKCS1v15(crand.Reader, xp.privateKey, crypto.SHA256, msgDigest[:])
 	checkError(err)
 	return signature
 }
@@ -106,6 +108,24 @@ func (xp *XPaxos) getState() (int, bool) {
 	return view, isLeader
 }
 
+func (xp *XPaxos) generateSynchronousGroup(seed int64) {
+	r := rand.New(rand.NewSource(seed))
+	numAdded := 0
+
+	xp.synchronousGroup[xp.view] = true
+
+	for _, server := range r.Perm(len(xp.replicas)) {
+		if server != CLIENT && server != xp.view && numAdded < (len(xp.replicas) - 1) / 2 {
+			xp.synchronousGroup[server] = true
+			numAdded++
+		}
+	}
+
+	if xp.synchronousGroup[xp.id] != true {
+		xp.synchronousGroup = make(map[int]bool, 0)
+	}
+}
+
 func (xp *XPaxos) persist() {
 	buf := new(bytes.Buffer)
 	enc := gob.NewEncoder(buf)
@@ -128,8 +148,6 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 		reply.IsLeader = true
 
 		xp.mu.Lock()
-		defer xp.mu.Unlock()
-
 		xp.prepareSeqNum++
 		msgDigest := digest(request)
 		signature := xp.sign(msgDigest)
@@ -173,6 +191,7 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 		xp.mu.Lock()
 		xp.executeSeqNum++
 		reply.Success = true
+		xp.mu.Unlock()
 	} else {
 		reply.IsLeader = false
 		reply.Success = false
@@ -321,6 +340,10 @@ func (xp *XPaxos) Commit(msg Message, reply *CommitReply) {
 }
 
 //
+// -------------------------------- SUSPECT RPC -------------------------------
+//
+
+//
 // ------------------------------- MAKE FUNCTION ------------------------------
 //
 func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister, privateKey *rsa.PrivateKey,
@@ -340,12 +363,7 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister, privateKey
 	xp.privateKey = privateKey
 	xp.publicKeys = publicKeys
 
-	for server, _ := range xp.replicas {
-		if server != CLIENT {
-			xp.synchronousGroup[server] = true
-		}
-	}
-
+	xp.generateSynchronousGroup(1)
 	xp.readPersist(persister.ReadXPaxosState())
 	xp.mu.Unlock()
 
