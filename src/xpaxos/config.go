@@ -72,7 +72,7 @@ func makeConfig(t *testing.T, n int, unreliable bool) *config {
 // Shut down an XPaxos server but save its persistent state
 func (cfg *config) crash1(i int) {
 	if i == CLIENT {
-		DPrintf("Cannot call crash1() on client server; must call crashClient()")
+		dPrintf("Cannot call crash1() on client server; must call crashClient()")
 		return
 	}
 
@@ -108,7 +108,7 @@ func (cfg *config) crash1(i int) {
 // this server since we cannot really kill it
 func (cfg *config) start1(i int) {
 	if i == CLIENT {
-		DPrintf("Cannot call start1() on client server; must call startClient()")
+		dPrintf("Cannot call start1() on client server; must call startClient()")
 		return
 	}
 
@@ -227,9 +227,9 @@ func (cfg *config) cleanup() {
 func (cfg *config) connect(i int) {
 	if cfg.connected[i] == false {
 		if i == CLIENT {
-			DPrintf("Connected: client server (%d)\n", i)
+			dPrintf("Connected: client server (%d)\n", i)
 		} else {
-			DPrintf("Connected: XPaxos server (%d)\n", i)
+			dPrintf("Connected: XPaxos server (%d)\n", i)
 		}
 	}
 
@@ -256,9 +256,9 @@ func (cfg *config) connect(i int) {
 func (cfg *config) disconnect(i int) {
 	if cfg.connected[i] == true {
 		if i == CLIENT {
-			DPrintf("Disconnected: client server (%d)\n", i)
+			dPrintf("Disconnected: client server (%d)\n", i)
 		} else {
-			DPrintf("Disconnected: XPaxos server (%d)\n", i)
+			dPrintf("Disconnected: XPaxos server (%d)\n", i)
 		}
 	}
 

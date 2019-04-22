@@ -1,21 +1,13 @@
 package xpaxos
 
 import (
-	"bytes"
-	"crypto"
-	crand "crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"encoding/gob"
-	"encoding/json"
 	"labrpc"
-	"log"
 	"sync"
 	"time"
-	"math/rand"
+	"crypto/rsa"
+	"bytes"
 )
 
-//const DELTA = 100    // Synchronous group time frame delta (in milliseconds)
 const BITSIZE = 1024 // RSA private key bit size
 
 const (
@@ -61,92 +53,10 @@ type CommitLogEntry struct {
 }
 
 //
-// ------------------------------ HELPER FUNCTIONS -----------------------------
-//
-func checkError(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func digest(msg interface{}) [32]byte { // Crypto message digest
-	jsonBytes, _ := json.Marshal(msg)
-	return sha256.Sum256(jsonBytes)
-}
-
-func generateKeys() (*rsa.PrivateKey, *rsa.PublicKey) { // Crypto RSA private/public key generation
-	key, err := rsa.GenerateKey(crand.Reader, BITSIZE)
-	checkError(err)
-	return key, &key.PublicKey
-}
-
-func (xp *XPaxos) sign(msgDigest [32]byte) []byte { // Crypto message signature
-	signature, err := rsa.SignPKCS1v15(crand.Reader, xp.privateKey, crypto.SHA256, msgDigest[:])
-	checkError(err)
-	return signature
-}
-
-func (xp *XPaxos) verify(server int, msgDigest [32]byte, signature []byte) bool { // Crypto signature verification
-	err := rsa.VerifyPKCS1v15(xp.publicKeys[server], crypto.SHA256, msgDigest[:], signature)
-	if err != nil {
-		return false
-	}
-	return true
-}
-
-func (xp *XPaxos) getState() (int, bool) {
-	xp.mu.Lock()
-	defer xp.mu.Unlock()
-
-	isLeader := false
-	view := xp.view
-
-	if xp.id == view {
-		isLeader = true
-	}
-
-	return view, isLeader
-}
-
-func (xp *XPaxos) generateSynchronousGroup(seed int64) {
-	r := rand.New(rand.NewSource(seed))
-	numAdded := 0
-
-	xp.synchronousGroup[xp.view] = true
-
-	for _, server := range r.Perm(len(xp.replicas)) {
-		if server != CLIENT && server != xp.view && numAdded < (len(xp.replicas) - 1) / 2 {
-			xp.synchronousGroup[server] = true
-			numAdded++
-		}
-	}
-
-	if xp.synchronousGroup[xp.id] != true {
-		xp.synchronousGroup = make(map[int]bool, 0)
-	}
-}
-
-func (xp *XPaxos) persist() {
-	buf := new(bytes.Buffer)
-	enc := gob.NewEncoder(buf)
-	enc.Encode(0)
-	data := buf.Bytes()
-	xp.persister.SaveXPaxosState(data)
-}
-
-func (xp *XPaxos) readPersist(data []byte) {
-	buf := bytes.NewBuffer(data)
-	dec := gob.NewDecoder(buf)
-	dec.Decode(0)
-}
-
-//
-// ---------------------------- REPLICATE/REPLY RPC ---------------------------
+// ------------------------------- REPLICATE RPC ------------------------------
 //
 func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 	if xp.id == xp.view { // If XPaxos server is the leader
-		reply.IsLeader = true
-
 		xp.mu.Lock()
 		xp.prepareSeqNum++
 		msgDigest := digest(request)
@@ -190,6 +100,7 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 
 		xp.mu.Lock()
 		xp.executeSeqNum++
+		reply.IsLeader = true
 		reply.Success = true
 		xp.mu.Unlock()
 	} else {
@@ -208,7 +119,7 @@ type PrepareReply struct {
 }
 
 func (xp *XPaxos) sendPrepare(server int, prepareEntry PrepareLogEntry, reply *PrepareReply) bool {
-	DPrintf("Prepare: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
+	dPrintf("Prepare: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.Prepare", prepareEntry, reply)
 }
 
@@ -300,7 +211,7 @@ type CommitReply struct {
 }
 
 func (xp *XPaxos) sendCommit(server int, msg Message, reply *CommitReply) bool {
-	DPrintf("Commit: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
+	dPrintf("Commit: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.Commit", msg, reply)
 }
 
@@ -340,7 +251,7 @@ func (xp *XPaxos) Commit(msg Message, reply *CommitReply) {
 }
 
 //
-// -------------------------------- SUSPECT RPC -------------------------------
+// --------------------------------- REPLY RPC --------------------------------
 //
 
 //

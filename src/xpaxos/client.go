@@ -31,7 +31,7 @@ type ReplicateReply struct {
 }
 
 func (client *Client) sendReplicate(server int, request ClientRequest, reply *ReplicateReply) bool {
-	DPrintf("Replicate: from client server (%d) to XPaxos server (%d)\n", CLIENT, server)
+	dPrintf("Replicate: from client server (%d) to XPaxos server (%d)\n", CLIENT, server)
 	return client.replicas[server].Call("XPaxos.Replicate", request, reply)
 }
 
@@ -69,9 +69,9 @@ func (client *Client) Propose(op interface{}) { // For simplicity, we assume the
 
 	select {
 	case <-timer:
-		IPrintf("Timeout: client server (%d)\n", CLIENT)
+		iPrintf("Timeout: client server (%d)\n", CLIENT)
 	case <-replyCh:
-		IPrintf("Success: committed request (%d)\n", client.timestamp)
+		iPrintf("Success: committed request (%d)\n", client.timestamp)
 	}
 
 	client.timestamp++
