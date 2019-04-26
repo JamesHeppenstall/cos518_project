@@ -57,12 +57,15 @@ import "strings"
 import "math/rand"
 import "time"
 
+const FAULT_DELAY = 1000
+
 type reqMsg struct {
 	endname  interface{} // name of sending ClientEnd
 	svcMeth  string      // e.g. "Raft.AppendEntries"
 	argsType reflect.Type
 	args     []byte
 	replyCh  chan replyMsg
+	callerId	 int
 }
 
 type replyMsg struct {
@@ -78,12 +81,13 @@ type ClientEnd struct {
 // send an RPC, wait for the reply.
 // the return value indicates success; false means the
 // server couldn't be contacted.
-func (e *ClientEnd) Call(svcMeth string, args interface{}, reply interface{}) bool {
+func (e *ClientEnd) Call(svcMeth string, args interface{}, reply interface{}, callerId int) bool {
 	req := reqMsg{}
 	req.endname = e.endname
 	req.svcMeth = svcMeth
 	req.argsType = reflect.TypeOf(args)
 	req.replyCh = make(chan replyMsg)
+	req.callerId = callerId
 
 	qb := new(bytes.Buffer)
 	qe := gob.NewEncoder(qb)
@@ -115,6 +119,7 @@ type Network struct {
 	servers        map[interface{}]*Server     // servers, by name
 	connections    map[interface{}]interface{} // endname -> servername
 	endCh          chan reqMsg
+	faultRate	   map[interface{}]int
 }
 
 func MakeNetwork() *Network {
@@ -125,6 +130,7 @@ func MakeNetwork() *Network {
 	rn.servers = map[interface{}]*Server{}
 	rn.connections = map[interface{}](interface{}){}
 	rn.endCh = make(chan reqMsg)
+	rn.faultRate = map[interface{}]int{}
 
 	// single goroutine to handle all ClientEnd.Call()s
 	go func() {
@@ -134,6 +140,10 @@ func MakeNetwork() *Network {
 	}()
 
 	return rn
+}
+
+func (rn *Network) SetFaultRate(server int, rate int) {
+	rn.faultRate[server] = rate
 }
 
 func (rn *Network) Reliable(yes bool) {
@@ -199,6 +209,15 @@ func (rn *Network) ProcessReq(req reqMsg) {
 			return
 		}
 
+		// failure when sending to destination
+		if (rand.Int()%100) < rn.faultRate[servername] {
+			// drop the request, return as if timeout
+			log.Printf("Couldn't connect from Server (%d) to Server (%d)\n", req.callerId, servername)
+			time.Sleep(time.Duration(FAULT_DELAY) * time.Millisecond)
+			req.replyCh <- replyMsg{false, nil}
+			return
+		}
+
 		// execute the request (call the RPC handler).
 		// in a separate thread so that we can periodically check
 		// if the server has been killed and the RPC should get a
@@ -218,6 +237,14 @@ func (rn *Network) ProcessReq(req reqMsg) {
 		for replyOK == false && serverDead == false {
 			select {
 			case reply = <-ech:
+				// failure when sending response to source
+				if (rand.Int()%100) < rn.faultRate[req.callerId]  {
+					// drop the request, return as if timeout
+					log.Printf("Couldn't connect from Server (%d) to Server (%d)\n", servername, req.callerId)
+					time.Sleep(time.Duration(FAULT_DELAY) * time.Millisecond)
+					req.replyCh <- replyMsg{false, nil}
+					return
+				}
 				replyOK = true
 			case <-time.After(100 * time.Millisecond):
 				serverDead = rn.IsServerDead(req.endname, servername, server)
