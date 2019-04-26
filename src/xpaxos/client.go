@@ -32,7 +32,7 @@ type ReplicateReply struct {
 
 func (client *Client) sendReplicate(server int, request ClientRequest, reply *ReplicateReply) bool {
 	dPrintf("Replicate: from client server (%d) to XPaxos server (%d)\n", CLIENT, server)
-	return client.replicas[server].Call("XPaxos.Replicate", request, reply)
+	return client.replicas[server].Call("XPaxos.Replicate", request, reply, CLIENT)
 }
 
 func (client *Client) issueReplicate(server int, request ClientRequest, replyCh chan ReplicateReply) {

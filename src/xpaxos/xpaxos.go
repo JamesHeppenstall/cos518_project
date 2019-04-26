@@ -51,7 +51,7 @@ type CommitLogEntry struct {
 }
 
 //
-// ------------------------------- REPLICATE RPC ------------------------------
+// ---------------------------- REPLICATE/REPLY RPC ---------------------------
 //
 func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 	if xp.id == xp.view { // If XPaxos server is the leader
@@ -116,7 +116,7 @@ type PrepareReply struct {
 
 func (xp *XPaxos) sendPrepare(server int, prepareEntry PrepareLogEntry, reply *PrepareReply) bool {
 	dPrintf("Prepare: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
-	return xp.replicas[server].Call("XPaxos.Prepare", prepareEntry, reply)
+	return xp.replicas[server].Call("XPaxos.Prepare", prepareEntry, reply, xp.id)
 }
 
 func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh chan bool) {
@@ -203,7 +203,7 @@ type CommitReply struct {
 
 func (xp *XPaxos) sendCommit(server int, msg Message, reply *CommitReply) bool {
 	dPrintf("Commit: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
-	return xp.replicas[server].Call("XPaxos.Commit", msg, reply)
+	return xp.replicas[server].Call("XPaxos.Commit", msg, reply, xp.id)
 }
 
 func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
@@ -240,10 +240,6 @@ func (xp *XPaxos) Commit(msg Message, reply *CommitReply) {
 		}
 	}
 }
-
-//
-// --------------------------------- REPLY RPC --------------------------------
-//
 
 //
 // ------------------------------- MAKE FUNCTION ------------------------------
