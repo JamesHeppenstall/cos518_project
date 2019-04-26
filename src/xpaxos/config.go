@@ -2,6 +2,7 @@ package xpaxos
 
 import (
 	crand "crypto/rand"
+	"crypto/rsa"
 	"encoding/base64"
 	"labrpc"
 	"runtime"
@@ -20,18 +21,18 @@ func randstring(n int) string {
 }
 
 type config struct {
-	mu        sync.Mutex
-	t         *testing.T
-	net       *labrpc.Network
-	n         int   // Total number of client and XPaxos servers
-	done      int32 // Tell internal threads to die
-	xpServers []*XPaxos
-	client    *Client
-	applyErr  []string // From apply channel readers
-	connected []bool   // Whether each server is on the net
-	saved     []*Persister
-	endnames  [][]string    // The port file names each sends to
-	logs      []map[int]int // Copy of each server's committed entries
+	mu          sync.Mutex
+	t           *testing.T
+	net         *labrpc.Network
+	n           int   // Total number of client and XPaxos servers
+	done        int32 // Tell internal threads to die
+	xpServers   []*XPaxos
+	client      *Client
+	connected   []bool // Whether each server is on the net
+	saved       []*Persister
+	endnames    [][]string // The port file names each sends to
+	privateKeys map[int]*rsa.PrivateKey
+	publicKeys  map[int]*rsa.PublicKey
 }
 
 func makeConfig(t *testing.T, n int, unreliable bool) *config {
@@ -40,25 +41,23 @@ func makeConfig(t *testing.T, n int, unreliable bool) *config {
 	cfg.t = t
 	cfg.net = labrpc.MakeNetwork()
 	cfg.n = n
-	cfg.applyErr = make([]string, cfg.n)
 	cfg.xpServers = make([]*XPaxos, cfg.n)
 	cfg.client = &Client{}
 	cfg.connected = make([]bool, cfg.n)
 	cfg.saved = make([]*Persister, cfg.n)
 	cfg.endnames = make([][]string, cfg.n)
-	cfg.logs = make([]map[int]int, cfg.n)
+	cfg.privateKeys = make(map[int]*rsa.PrivateKey, cfg.n)
+	cfg.publicKeys = make(map[int]*rsa.PublicKey, cfg.n)
 
 	cfg.setUnreliable(unreliable)
 
 	cfg.net.LongDelays(false)
 
 	// Create client server
-	cfg.logs[CLIENT] = map[int]int{}
 	cfg.startClient()
 
 	// Create a full set of XPaxos servers
 	for i := 1; i < cfg.n; i++ {
-		cfg.logs[i] = map[int]int{}
 		cfg.start1(i)
 	}
 
@@ -73,7 +72,7 @@ func makeConfig(t *testing.T, n int, unreliable bool) *config {
 // Shut down an XPaxos server but save its persistent state
 func (cfg *config) crash1(i int) {
 	if i == CLIENT {
-		DPrintf("Cannot call crash1() on client server; must call crashClient()")
+		dPrintf("Cannot call crash1() on client server; must call crashClient()")
 		return
 	}
 
@@ -109,7 +108,7 @@ func (cfg *config) crash1(i int) {
 // this server since we cannot really kill it
 func (cfg *config) start1(i int) {
 	if i == CLIENT {
-		DPrintf("Cannot call start1() on client server; must call startClient()")
+		dPrintf("Cannot call start1() on client server; must call startClient()")
 		return
 	}
 
@@ -128,6 +127,11 @@ func (cfg *config) start1(i int) {
 		cfg.net.Connect(cfg.endnames[i][j], j)
 	}
 
+	// A fresh pair of RSA private/public keys
+	privateKey, publicKey := generateKeys()
+	cfg.privateKeys[i] = privateKey
+	cfg.publicKeys[i] = publicKey
+
 	cfg.mu.Lock()
 
 	// A fresh persister, so old instance doesn't overwrite new instance's persisted state
@@ -140,7 +144,7 @@ func (cfg *config) start1(i int) {
 
 	cfg.mu.Unlock()
 
-	xp := Make(ends, i, cfg.saved[i])
+	xp := Make(ends, i, cfg.saved[i], cfg.privateKeys[i], cfg.publicKeys)
 
 	cfg.mu.Lock()
 	cfg.xpServers[i] = xp
@@ -223,9 +227,9 @@ func (cfg *config) cleanup() {
 func (cfg *config) connect(i int) {
 	if cfg.connected[i] == false {
 		if i == CLIENT {
-			DPrintf("Connected: client server (%d)\n", i)
+			dPrintf("Connected: client server (%d)\n", i)
 		} else {
-			DPrintf("Connected: XPaxos server (%d)\n", i)
+			dPrintf("Connected: XPaxos server (%d)\n", i)
 		}
 	}
 
@@ -252,9 +256,9 @@ func (cfg *config) connect(i int) {
 func (cfg *config) disconnect(i int) {
 	if cfg.connected[i] == true {
 		if i == CLIENT {
-			DPrintf("Disconnected: client server (%d)\n", i)
+			dPrintf("Disconnected: client server (%d)\n", i)
 		} else {
-			DPrintf("Disconnected: XPaxos server (%d)\n", i)
+			dPrintf("Disconnected: XPaxos server (%d)\n", i)
 		}
 	}
 

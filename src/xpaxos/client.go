@@ -26,11 +26,12 @@ type ClientRequest struct {
 // ---------------------------- REPLICATE/REPLY RPC ---------------------------
 //
 type ReplicateReply struct {
-	Success bool
+	IsLeader bool
+	Success  bool
 }
 
 func (client *Client) sendReplicate(server int, request ClientRequest, reply *ReplicateReply) bool {
-	DPrintf("Replicate: from client server (%d) to XPaxos server (%d)\n", CLIENT, server)
+	dPrintf("Replicate: from client server (%d) to XPaxos server (%d)\n", CLIENT, server)
 	return client.replicas[server].Call("XPaxos.Replicate", request, reply)
 }
 
@@ -40,11 +41,13 @@ func (client *Client) issueReplicate(server int, request ClientRequest, replyCh 
 	if ok := client.sendReplicate(server, request, reply); ok {
 		if reply.Success == true { // Only the leader should reply to client server
 			replyCh <- *reply
+		} else if reply.IsLeader == true {
+			go client.issueReplicate(server, request, replyCh)
 		}
 	}
 }
 
-func (client *Client) Propose(op interface{}) {
+func (client *Client) Propose(op interface{}) { // For simplicity, we assume the client's proposal is correct
 	client.mu.Lock()
 	defer client.mu.Unlock()
 
@@ -66,9 +69,9 @@ func (client *Client) Propose(op interface{}) {
 
 	select {
 	case <-timer:
-		IPrintf("Timeout: client server (%d)\n", CLIENT)
+		iPrintf("Timeout: client server (%d)\n", CLIENT)
 	case <-replyCh:
-		IPrintf("Success: committed request (%d)\n", client.timestamp)
+		iPrintf("Success: committed request (%d)\n", client.timestamp)
 	}
 
 	client.timestamp++
