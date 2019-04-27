@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const DEBUG = 2      // Debugging (0 = None, 1 = Info, 2 = Debug)
+const DEBUG = 1      // Debugging (0 = None, 1 = Info, 2 = Debug)
 const CLIENT = 0     // Client ID is always set to zero - DO NOT CHANGE
 const TIMEOUT = 5000 // Client timeout period (in milliseconds)
 const BITSIZE = 1024 // RSA private key bit size

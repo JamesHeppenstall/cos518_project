@@ -14,7 +14,7 @@ func TestCommonCase1(t *testing.T) {
 
 	fmt.Println("Test: Common Case (t=1)")
 
-	iters := 1
+	iters := 3
 	for i := 0; i < iters; i++ {
 		fmt.Println(cfg.xpServers[1].view)
 		fmt.Println(cfg.xpServers[2].view)
@@ -23,11 +23,12 @@ func TestCommonCase1(t *testing.T) {
 		fmt.Println(cfg.xpServers[1].view)
 		fmt.Println(cfg.xpServers[2].view)
 		fmt.Println(cfg.xpServers[3].view)
-		comparePrepareSeqNums(cfg)
-		compareExecuteSeqNums(cfg)
-		comparePrepareLogEntries(cfg)
-		compareCommitLogEntries(cfg)
 	}
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
+
 
 }
 

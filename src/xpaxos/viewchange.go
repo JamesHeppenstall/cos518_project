@@ -31,6 +31,19 @@ func (xp *XPaxos) issueSuspect() {
 	}
 }
 
+func (xp *XPaxos) forwardSuspect(msg SuspectMessage) {
+	xp.mu.Lock()
+	defer xp.mu.Unlock()
+
+	reply := &Reply{}
+
+	for server, _ := range xp.replicas {
+		if server != CLIENT {
+			go xp.sendSuspect(server, msg, reply)
+		}
+	}
+}
+
 func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 	xp.mu.Lock()
 	_, ok := xp.suspectSet[digest(msg)]
@@ -39,10 +52,14 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 		xp.suspectSet[digest(msg)] = msg
 		xp.mu.Unlock()
 		
-		go xp.issueSuspect()
+		go xp.forwardSuspect(msg)
 
 		xp.mu.Lock()
 		xp.view++
+
+		xp.vcSet = make(map[[32]byte]ViewChangeMessage, 0)
+		xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
+
 		xp.generateSynchronousGroup(int64(xp.getLeader()))
 		xp.mu.Unlock()
 
