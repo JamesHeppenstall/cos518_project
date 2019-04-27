@@ -271,7 +271,7 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister, privateKey
 	xp.vcTimer = nil
 	xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
 
-	xp.generateSynchronousGroup(int64(xp.getLeader()))
+	xp.generateSynchronousGroup(int64(xp.view))
 	xp.readPersist(persister.ReadXPaxosState())
 	xp.mu.Unlock()
 
