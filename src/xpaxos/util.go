@@ -92,6 +92,7 @@ func (xp *XPaxos) generateSynchronousGroup(seed int64) {
 	r := rand.New(rand.NewSource(seed))
 	numAdded := 0
 
+	xp.synchronousGroup = make(map[int]bool, 0)
 	xp.synchronousGroup[xp.getLeader()] = true
 
 	for _, server := range r.Perm(len(xp.replicas)) {
