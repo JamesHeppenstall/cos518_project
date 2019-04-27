@@ -9,7 +9,7 @@ import (
 // -------------------------------- SUSPECT RPC -------------------------------
 //
 func (xp *XPaxos) sendSuspect(server int, msg SuspectMessage, reply *Reply) bool {
-	dPrintf("Suspect: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
+	dPrintf("Suspect: from XPaxos server (%d) to XPaxos server (%d) %d\n", xp.id, server, xp.view)
 	return xp.replicas[server].Call("XPaxos.Suspect", msg, reply, xp.id)
 }
 
@@ -55,12 +55,16 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 		go xp.forwardSuspect(msg)
 
 		xp.mu.Lock()
-		xp.view++
+		if xp.view == msg.View {
+			xp.view++	
+		} else {
+			xp.view = msg.View
+		}
 
 		xp.vcSet = make(map[[32]byte]ViewChangeMessage, 0)
 		xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
 
-		xp.generateSynchronousGroup(int64(xp.getLeader()))
+		xp.generateSynchronousGroup(int64(xp.view))
 		xp.mu.Unlock()
 
 		go xp.issueViewChange()
@@ -79,7 +83,7 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 // ------------------------------ VIEW-CHANGE RPC -----------------------------
 //
 func (xp *XPaxos) sendViewChange(server int, msg ViewChangeMessage, reply *Reply) bool {
-	dPrintf("ViewChange: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
+	iPrintf("ViewChange: from XPaxos server (%d) to XPaxos server (%d) %d %v\n", xp.id, server, xp.view, xp.synchronousGroup)
 	return xp.replicas[server].Call("XPaxos.ViewChange", msg, reply, xp.id)
 }
 
@@ -95,12 +99,11 @@ func (xp *XPaxos) issueViewChange() {
 	reply := &Reply{}
 
 	for server, _ := range xp.synchronousGroup {
+		iPrintf("%d %d %v\n", server, xp.id, xp.synchronousGroup)
 
 		xp.mu.Unlock()
-		if ok := xp.sendViewChange(server, msg, reply); !ok {
-			xp.vcFlag = true 
-			go xp.issueSuspect()
-		}
+
+		go xp.sendViewChange(server, msg, reply)
 		xp.mu.Lock()
 	}
 	xp.mu.Unlock()
@@ -108,55 +111,62 @@ func (xp *XPaxos) issueViewChange() {
 
 func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 	xp.mu.Lock()
-	xp.vcSet[digest(msg)] = msg
-	if len(xp.vcSet) == len(xp.replicas)-1 {
-		xp.netFlag = true
-		xp.vcFlag = false
-		xp.vcTimer = time.NewTimer(labrpc.DELTA * time.Millisecond).C
+	
+	if xp.view <= msg.View {
+		xp.vcSet[digest(msg)] = msg
+		if len(xp.vcSet) == len(xp.replicas)-1 {
+			xp.netFlag = true
+			xp.vcFlag = false
+			xp.vcTimer = time.NewTimer(2 * labrpc.DELTA * time.Millisecond).C
 
-		go xp.issueVCFinal()
-		go func(xp *XPaxos) {
-			<-xp.vcTimer
+			go xp.issueVCFinal()
+			go func(xp *XPaxos) {
+				<-xp.vcTimer
 
-			xp.mu.Lock()
-			if xp.vcFlag == false {
-				go xp.issueSuspect()
-			}
-			xp.mu.Unlock()
+				xp.mu.Lock()
+				if xp.vcFlag == false {
+					go xp.issueSuspect()
+				}
+				xp.mu.Unlock()
 
-		}(xp)
+			}(xp)
+			return
+		}
+		xp.mu.Unlock()
+
+		<-xp.netTimer
+		iPrintf("%d %d", len(xp.vcSet), xp.id)
+
+		xp.mu.Lock()
+		if xp.netFlag == false && len(xp.vcSet) >= (len(xp.replicas)+1)/2 {
+			xp.netFlag = true
+			xp.vcFlag = false
+			xp.vcTimer = time.NewTimer(5 * labrpc.DELTA * time.Millisecond).C
+
+			go xp.issueVCFinal()
+
+			go func(xp *XPaxos) {
+				<-xp.vcTimer
+
+				if xp.vcFlag == false {
+					iPrintf("VCTIMER TIMEOUT")
+					go xp.issueSuspect()
+				}
+			}(xp)
+		} else if xp.netFlag == false {
+			xp.vcFlag = true 
+			go xp.issueSuspect()
+		}
 	}
 	xp.mu.Unlock()
 
-	<-xp.netTimer
-	iPrintf("%d", len(xp.vcSet))
-
-	xp.mu.Lock()
-	if xp.netFlag == false && len(xp.vcSet) >= (len(xp.replicas)+1)/2 {
-		xp.netFlag = true
-		xp.vcFlag = false
-		xp.vcTimer = time.NewTimer(labrpc.DELTA * time.Millisecond).C
-
-		go xp.issueVCFinal()
-		go func(xp *XPaxos) {
-			<-xp.vcTimer
-
-			xp.mu.Lock()
-			if xp.vcFlag == false {
-				iPrintf("VCTIMER TIMEOUT")
-				go xp.issueSuspect()
-			}
-			xp.mu.Unlock()
-		}(xp)
-	}
-	xp.mu.Unlock()
 }
 
 //
 // -------------------------------- VC-FINAL RPC ------------------------------
 //
 func (xp *XPaxos) sendVCFinal(server int, msg VCFinalMessage, reply *Reply) bool {
-	dPrintf("VCFinal: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
+	iPrintf("VCFinal: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.VCFinal", msg, reply, xp.id)
 }
 
@@ -185,10 +195,14 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
 
+	//iPrintf("HERE1 %d %d\n", xp.view, xp.id)
+
 	if xp.synchronousGroup[msg.SenderId] == true {
 		xp.receivedVCFinal[msg.SenderId] = msg.VCSet
+		iPrintf("HERE2 %d %d %d\n", xp.view, xp.id, len(xp.receivedVCFinal))
 
 		if len(xp.receivedVCFinal) >= len(xp.synchronousGroup) {
+			iPrintf("HERE3 %d %d\n", xp.view, xp.id)
 			for _, msg := range msg.VCSet {
 				xp.vcSet[digest(msg)] = msg
 			}
