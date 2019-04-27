@@ -57,7 +57,7 @@ import "strings"
 import "math/rand"
 import "time"
 
-const DELTA = 1000
+const DELTA = 500
 
 type reqMsg struct {
 	endname  interface{} // name of sending ClientEnd

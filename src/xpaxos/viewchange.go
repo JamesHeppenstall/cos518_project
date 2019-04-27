@@ -85,7 +85,6 @@ func (xp *XPaxos) sendViewChange(server int, msg ViewChangeMessage, reply *Reply
 
 func (xp *XPaxos) issueViewChange() {
 	xp.mu.Lock()
-	defer xp.mu.Unlock()
 
 	msg := ViewChangeMessage{
 		MsgType:   VIEWCHANGE,
@@ -96,8 +95,15 @@ func (xp *XPaxos) issueViewChange() {
 	reply := &Reply{}
 
 	for server, _ := range xp.synchronousGroup {
-		go xp.sendViewChange(server, msg, reply)
+
+		xp.mu.Unlock()
+		if ok := xp.sendViewChange(server, msg, reply); !ok {
+			xp.vcFlag = true 
+			go xp.issueSuspect()
+		}
+		xp.mu.Lock()
 	}
+	xp.mu.Unlock()
 }
 
 func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
@@ -106,7 +112,7 @@ func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 	if len(xp.vcSet) == len(xp.replicas)-1 {
 		xp.netFlag = true
 		xp.vcFlag = false
-		xp.vcTimer = time.NewTimer(TIMEOUT * time.Millisecond).C
+		xp.vcTimer = time.NewTimer(labrpc.DELTA * time.Millisecond).C
 
 		go xp.issueVCFinal()
 		go func(xp *XPaxos) {
@@ -123,12 +129,13 @@ func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 	xp.mu.Unlock()
 
 	<-xp.netTimer
+	iPrintf("%d", len(xp.vcSet))
 
 	xp.mu.Lock()
 	if xp.netFlag == false && len(xp.vcSet) >= (len(xp.replicas)+1)/2 {
 		xp.netFlag = true
 		xp.vcFlag = false
-		xp.vcTimer = time.NewTimer(TIMEOUT * time.Millisecond).C
+		xp.vcTimer = time.NewTimer(labrpc.DELTA * time.Millisecond).C
 
 		go xp.issueVCFinal()
 		go func(xp *XPaxos) {
@@ -136,6 +143,7 @@ func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 
 			xp.mu.Lock()
 			if xp.vcFlag == false {
+				iPrintf("VCTIMER TIMEOUT")
 				go xp.issueSuspect()
 			}
 			xp.mu.Unlock()
@@ -155,7 +163,6 @@ func (xp *XPaxos) sendVCFinal(server int, msg VCFinalMessage, reply *Reply) bool
 func (xp *XPaxos) issueVCFinal() {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
-
 
 	sendVcSet := make(map[[32]byte]ViewChangeMessage)
 
