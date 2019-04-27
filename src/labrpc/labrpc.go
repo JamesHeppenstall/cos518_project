@@ -57,7 +57,7 @@ import "strings"
 import "math/rand"
 import "time"
 
-const FAULT_DELAY = 1000
+const DELTA = 1000
 
 type reqMsg struct {
 	endname  interface{} // name of sending ClientEnd
@@ -213,7 +213,7 @@ func (rn *Network) ProcessReq(req reqMsg) {
 		if (rand.Int()%100) < rn.faultRate[servername] {
 			// drop the request, return as if timeout
 			log.Printf("Couldn't connect from Server (%d) to Server (%d)\n", req.callerId, servername)
-			time.Sleep(time.Duration(FAULT_DELAY) * time.Millisecond)
+			time.Sleep(time.Duration(DELTA) * time.Millisecond)
 			req.replyCh <- replyMsg{false, nil}
 			return
 		}
@@ -241,7 +241,7 @@ func (rn *Network) ProcessReq(req reqMsg) {
 				if (rand.Int()%100) < rn.faultRate[req.callerId]  {
 					// drop the request, return as if timeout
 					log.Printf("Couldn't connect from Server (%d) to Server (%d)\n", servername, req.callerId)
-					time.Sleep(time.Duration(FAULT_DELAY) * time.Millisecond)
+					time.Sleep(time.Duration(DELTA) * time.Millisecond)
 					req.replyCh <- replyMsg{false, nil}
 					return
 				}

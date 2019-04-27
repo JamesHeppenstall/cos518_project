@@ -2,34 +2,12 @@ package xpaxos
 
 import (
 	"labrpc"
-	"sync"
 	"time"
 )
-
-const TIMEOUT = 1000 // Timeout period (in milliseconds) for Propose()
-
-type Client struct {
-	mu        sync.Mutex
-	replicas  []*labrpc.ClientEnd
-	timestamp int
-	// Must include statistics for evaluation
-}
-
-type ClientRequest struct {
-	MsgType   int
-	Timestamp int
-	Operation interface{}
-	ClientId  int
-}
 
 //
 // ---------------------------- REPLICATE/REPLY RPC ---------------------------
 //
-type ReplicateReply struct {
-	IsLeader bool
-	Success  bool
-}
-
 func (client *Client) sendReplicate(server int, request ClientRequest, reply *ReplicateReply) bool {
 	dPrintf("Replicate: from client server (%d) to XPaxos server (%d)\n", CLIENT, server)
 	return client.replicas[server].Call("XPaxos.Replicate", request, reply, CLIENT)

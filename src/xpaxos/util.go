@@ -12,9 +12,6 @@ import (
 	"math/rand"
 )
 
-const DEBUG = 2      // Debugging (0 = None, 1 = Info, 2 = Debug)
-const BITSIZE = 1024 // RSA private key bit size
-
 //
 // ------------------------------ DEBUG FUNCTIONS -----------------------------
 //
@@ -111,12 +108,49 @@ func (xp *XPaxos) appendToPrepareLog(request ClientRequest, msg Message) Prepare
 	return prepareEntry
 }
 
+func (xp *XPaxos) updatePrepareLog(request ClientRequest, msg Message, sn int) {
+	prepareEntry := PrepareLogEntry{
+		Request: request,
+		Msg0: msg}
+
+	xp.prepareLog[sn] = prepareEntry
+}
+
 func (xp *XPaxos) appendToCommitLog(request ClientRequest, msgMap map[int]Message) {
 	commitEntry := CommitLogEntry{
 		Request: request,
-		Msg0:    msgMap}
+		Msg0:    msgMap,
+		View:    xp.view}
 
 	xp.commitLog = append(xp.commitLog, commitEntry)
+}
+
+func (xp *XPaxos) compareLogs(prepareLog []PrepareLogEntry, commitLog []CommitLogEntry) bool {
+	var commitEntryMsg Message
+	var check1 bool
+	var check2 bool
+	var check3 bool
+
+	if len(prepareLog) != len(commitLog) {
+		return false
+	} else {
+		for sn, prepareEntry := range prepareLog {
+			commitEntryMsg = commitLog[sn].Msg0[xp.getLeader()]
+
+			check1 = (prepareEntry.Msg0.MsgDigest == commitEntryMsg.MsgDigest)
+			check2 = (prepareEntry.Msg0.PrepareSeqNum == commitEntryMsg.PrepareSeqNum)
+			check3 = (prepareEntry.Msg0.View == commitEntryMsg.View)
+
+			if check1 != true || check2 != true || check3 != true {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+func (xp *XPaxos) getLeader() int {
+	return (xp.view % (len(xp.replicas) - 1)) + 1
 }
 
 func (xp *XPaxos) persist() {

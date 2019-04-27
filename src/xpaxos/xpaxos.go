@@ -4,51 +4,8 @@ import (
 	"bytes"
 	"crypto/rsa"
 	"labrpc"
-	"sync"
 	"time"
 )
-
-const (
-	REPLICATE = iota
-	PREPARE   = iota
-	COMMIT    = iota
-	REPLY     = iota
-)
-
-type XPaxos struct {
-	mu               sync.Mutex
-	persister        *Persister
-	replicas         []*labrpc.ClientEnd
-	synchronousGroup map[int]bool
-	id               int
-	view             int
-	prepareSeqNum    int
-	executeSeqNum    int
-	prepareLog       []PrepareLogEntry
-	commitLog        []CommitLogEntry
-	privateKey       *rsa.PrivateKey
-	publicKeys       map[int]*rsa.PublicKey
-}
-
-type Message struct {
-	MsgType         int
-	MsgDigest       [32]byte
-	Signature       []byte
-	PrepareSeqNum   int
-	View            int
-	ClientTimestamp int
-	ServerId        int // XPaxos server that created the message
-}
-
-type PrepareLogEntry struct {
-	Request ClientRequest
-	Msg0    Message
-}
-
-type CommitLogEntry struct {
-	Request ClientRequest
-	Msg0    map[int]Message
-}
 
 //
 // ---------------------------- REPLICATE/REPLY RPC ---------------------------
@@ -108,12 +65,6 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 //
 // -------------------------------- PREPARE RPC -------------------------------
 //
-type PrepareReply struct {
-	MsgDigest [32]byte
-	Signature []byte
-	Success   bool
-}
-
 func (xp *XPaxos) sendPrepare(server int, prepareEntry PrepareLogEntry, reply *PrepareReply) bool {
 	dPrintf("Prepare: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.Prepare", prepareEntry, reply, xp.id)
@@ -195,12 +146,6 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *PrepareReply) {
 //
 // --------------------------------- COMMIT RPC --------------------------------
 //
-type CommitReply struct {
-	MsgDigest [32]byte
-	Signature []byte
-	Success   bool
-}
-
 func (xp *XPaxos) sendCommit(server int, msg Message, reply *CommitReply) bool {
 	dPrintf("Commit: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.Commit", msg, reply, xp.id)
@@ -261,7 +206,7 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister, privateKey
 	xp.privateKey = privateKey
 	xp.publicKeys = publicKeys
 
-	xp.generateSynchronousGroup(1)
+	xp.generateSynchronousGroup(int64(xp.view))
 	xp.readPersist(persister.ReadXPaxosState())
 	xp.mu.Unlock()
 

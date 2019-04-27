@@ -11,7 +11,7 @@ func TestCommonCase1(t *testing.T) {
 	defer cfg.cleanup()
 
 	fmt.Println("Test: Common Case (t=1)")
-
+	
 	iters := 3
 	for i := 0; i < iters; i++ {
 		cfg.client.Propose(nil)

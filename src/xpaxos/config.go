@@ -6,33 +6,15 @@ import (
 	"encoding/base64"
 	"labrpc"
 	"runtime"
-	"sync"
 	"sync/atomic"
 	"testing"
 )
-
-const CLIENT = 0 // Client ID is always set to zero - DO NOT CHANGE
 
 func randstring(n int) string {
 	b := make([]byte, 2*n)
 	crand.Read(b)
 	s := base64.URLEncoding.EncodeToString(b)
 	return s[0:n]
-}
-
-type config struct {
-	mu          sync.Mutex
-	t           *testing.T
-	net         *labrpc.Network
-	n           int   // Total number of client and XPaxos servers
-	done        int32 // Tell internal threads to die
-	xpServers   []*XPaxos
-	client      *Client
-	connected   []bool // Whether each server is on the net
-	saved       []*Persister
-	endnames    [][]string // The port file names each sends to
-	privateKeys map[int]*rsa.PrivateKey
-	publicKeys  map[int]*rsa.PublicKey
 }
 
 func makeConfig(t *testing.T, n int, unreliable bool) *config {
