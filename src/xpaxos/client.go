@@ -13,14 +13,12 @@ func (client *Client) sendReplicate(server int, request ClientRequest, reply *Re
 	return client.replicas[server].Call("XPaxos.Replicate", request, reply, CLIENT)
 }
 
-func (client *Client) issueReplicate(server int, request ClientRequest, replyCh chan Reply) {
+func (client *Client) issueReplicate(server int, request ClientRequest, replyCh chan bool) {
 	reply := &Reply{}
 
 	if ok := client.sendReplicate(server, request, reply); ok {
 		if reply.Success == true { // Only the leader should reply to client server
-			replyCh <- *reply
-		} else if reply.IsLeader == true {
-			go client.issueReplicate(server, request, replyCh)
+			replyCh <- reply.Success
 		}
 	}
 }
@@ -35,7 +33,7 @@ func (client *Client) Propose(op interface{}) { // For simplicity, we assume the
 		Operation: op,
 		ClientId:  CLIENT}
 
-	replyCh := make(chan Reply)
+	replyCh := make(chan bool)
 
 	for server, _ := range client.replicas {
 		if server != CLIENT {
