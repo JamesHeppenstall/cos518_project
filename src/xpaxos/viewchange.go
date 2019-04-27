@@ -33,9 +33,7 @@ func (xp *XPaxos) issueSuspect() {
 
 func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 	xp.mu.Lock()
-	dPrintf("here")
 	_, ok := xp.suspectSet[digest(msg)]
-	dPrintf("here2")
 
 	if xp.view <= msg.View && ok == false {
 		xp.suspectSet[digest(msg)] = msg
@@ -87,9 +85,7 @@ func (xp *XPaxos) issueViewChange() {
 
 func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 	xp.mu.Lock()
-	dPrintf("here3")
 	xp.vcSet[digest(msg)] = msg
-	dPrintf("here4")
 	if len(xp.vcSet) == len(xp.replicas)-1 {
 		xp.netFlag = true
 		xp.vcFlag = false
@@ -143,11 +139,17 @@ func (xp *XPaxos) issueVCFinal() {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
 
+
+	sendVcSet := make(map[[32]byte]ViewChangeMessage)
+
+	for k, v := range xp.vcSet {
+		sendVcSet[k] = v
+	}
 	msg := VCFinalMessage{
 		MsgType:  VCFINAL,
 		View:     xp.view,
 		SenderId: xp.id,
-		VCSet:    xp.vcSet}
+		VCSet:    sendVcSet}
 
 	reply := &Reply{}
 	for server, _ := range xp.synchronousGroup {
