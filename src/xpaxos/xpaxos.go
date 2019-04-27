@@ -113,6 +113,11 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 	reply.MsgDigest = msgDigest
 	reply.Signature = signature
 
+	if xp.view != prepareEntry.Msg0.View {
+		xp.mu.Unlock()
+		return
+	}
+
 	if prepareEntry.Msg0.PrepareSeqNum == xp.prepareSeqNum+1 && bytes.Compare(prepareEntry.Msg0.MsgDigest[:],
 		msgDigest[:]) == 0 && xp.verify(prepareEntry.Msg0.SenderId, msgDigest, prepareEntry.Msg0.Signature) == true {
 		if len(xp.prepareLog) > 0 && prepareEntry.Request.Timestamp <= xp.prepareLog[len(xp.prepareLog)-1].Msg0.ClientTimestamp {
@@ -230,6 +235,11 @@ func (xp *XPaxos) Commit(msg Message, reply *Reply) {
 	signature := xp.sign(msgDigest)
 	reply.MsgDigest = msgDigest
 	reply.Signature = signature
+
+	if xp.view != msg.View {
+		reply.Suspicious = true
+		return
+	}
 
 	if xp.verify(msg.SenderId, msgDigest, msg.Signature) == true {
 		if xp.executeSeqNum < len(xp.commitLog) {
