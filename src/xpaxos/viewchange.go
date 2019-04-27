@@ -14,35 +14,50 @@ func (xp *XPaxos) sendSuspect(server int, msg SuspectMessage, reply *Reply) bool
 }
 
 func (xp *XPaxos) issueSuspect() {
+	xp.mu.Lock()
+	defer xp.mu.Unlock()
+
 	msg := SuspectMessage{
 		MsgType:  SUSPECT,
 		View:     xp.view,
 		SenderId: xp.id}
 
+	reply := &Reply{}
+
 	for server, _ := range xp.replicas {
 		if server != CLIENT {
-			go xp.sendSuspect(server, msg, nil)
+			go xp.sendSuspect(server, msg, reply)
 		}
 	}
 }
 
 func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
+	xp.mu.Lock()
+	dPrintf("here")
 	_, ok := xp.suspectSet[digest(msg)]
+	dPrintf("here2")
 
 	if xp.view <= msg.View && ok == false {
 		xp.suspectSet[digest(msg)] = msg
+		xp.mu.Unlock()
+		
 		go xp.issueSuspect()
 
+		xp.mu.Lock()
 		xp.view++
 		xp.generateSynchronousGroup(int64(xp.getLeader()))
+		xp.mu.Unlock()
 
 		go xp.issueViewChange()
+
+		xp.mu.Lock()
 
 		if len(xp.synchronousGroup) > 0 {
 			xp.netFlag = false
 			xp.netTimer = time.NewTimer(2 * labrpc.DELTA * time.Millisecond).C
 		}
 	}
+	xp.mu.Unlock()
 }
 
 //
@@ -54,53 +69,66 @@ func (xp *XPaxos) sendViewChange(server int, msg ViewChangeMessage, reply *Reply
 }
 
 func (xp *XPaxos) issueViewChange() {
+	xp.mu.Lock()
+	defer xp.mu.Unlock()
+
 	msg := ViewChangeMessage{
 		MsgType:   VIEWCHANGE,
 		View:      xp.view,
 		SenderId:  xp.id,
 		CommitLog: xp.commitLog}
 
+	reply := &Reply{}
+
 	for server, _ := range xp.synchronousGroup {
-		go xp.sendViewChange(server, msg, nil)
+		go xp.sendViewChange(server, msg, reply)
 	}
 }
 
 func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
+	xp.mu.Lock()
+	dPrintf("here3")
 	xp.vcSet[digest(msg)] = msg
-
+	dPrintf("here4")
 	if len(xp.vcSet) == len(xp.replicas)-1 {
 		xp.netFlag = true
-		go xp.issueVCFinal()
-
 		xp.vcFlag = false
 		xp.vcTimer = time.NewTimer(TIMEOUT * time.Millisecond).C
 
+		go xp.issueVCFinal()
 		go func(xp *XPaxos) {
 			<-xp.vcTimer
 
+			xp.mu.Lock()
 			if xp.vcFlag == false {
 				go xp.issueSuspect()
 			}
+			xp.mu.Unlock()
+
 		}(xp)
 	}
+	xp.mu.Unlock()
 
 	<-xp.netTimer
 
+	xp.mu.Lock()
 	if xp.netFlag == false && len(xp.vcSet) >= (len(xp.replicas)+1)/2 {
 		xp.netFlag = true
-		go xp.issueVCFinal()
-
 		xp.vcFlag = false
 		xp.vcTimer = time.NewTimer(TIMEOUT * time.Millisecond).C
 
+		go xp.issueVCFinal()
 		go func(xp *XPaxos) {
 			<-xp.vcTimer
 
+			xp.mu.Lock()
 			if xp.vcFlag == false {
 				go xp.issueSuspect()
 			}
+			xp.mu.Unlock()
 		}(xp)
 	}
+	xp.mu.Unlock()
 }
 
 //
@@ -112,18 +140,25 @@ func (xp *XPaxos) sendVCFinal(server int, msg VCFinalMessage, reply *Reply) bool
 }
 
 func (xp *XPaxos) issueVCFinal() {
+	xp.mu.Lock()
+	defer xp.mu.Unlock()
+
 	msg := VCFinalMessage{
 		MsgType:  VCFINAL,
 		View:     xp.view,
 		SenderId: xp.id,
 		VCSet:    xp.vcSet}
 
+	reply := &Reply{}
 	for server, _ := range xp.synchronousGroup {
-		go xp.sendVCFinal(server, msg, nil)
+		go xp.sendVCFinal(server, msg, reply)
 	}
 }
 
 func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
+	xp.mu.Lock()
+	defer xp.mu.Unlock()
+
 	if xp.synchronousGroup[msg.SenderId] == true {
 		xp.receivedVCFinal[msg.SenderId] = msg.VCSet
 
@@ -167,9 +202,12 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 						ClientTimestamp: msg0.ClientTimestamp,
 						SenderId:        msg0.SenderId}
 
-					xp.updatePrepareLog(sn, request, newMsg0)
+					if sn < len(xp.prepareLog) { 
+						xp.updatePrepareLog(sn, request, newMsg0)
+					} else {
+						xp.appendToPrepareLog(request, newMsg0)
+					}
 				}
-
 				go xp.issueNewView()
 			}
 		}
@@ -185,17 +223,24 @@ func (xp *XPaxos) sendNewView(server int, msg NewViewMessage, reply *Reply) bool
 }
 
 func (xp *XPaxos) issueNewView() {
+	xp.mu.Lock()
+	defer xp.mu.Unlock()
+
 	msg := NewViewMessage{
 		MsgType:    NEWVIEW,
 		View:       xp.view,
 		PrepareLog: xp.prepareLog}
 
+	reply := &Reply{}
 	for server, _ := range xp.synchronousGroup {
-		go xp.sendNewView(server, msg, nil)
+		go xp.sendNewView(server, msg, reply)
 	}
 }
 
 func (xp *XPaxos) NewView(msg NewViewMessage, reply *Reply) {
+	xp.mu.Lock()
+	defer xp.mu.Unlock()
+
 	if xp.compareLogs(msg.PrepareLog, xp.commitLog) {
 		xp.prepareLog = msg.PrepareLog
 		xp.prepareSeqNum = len(xp.prepareLog) - 1

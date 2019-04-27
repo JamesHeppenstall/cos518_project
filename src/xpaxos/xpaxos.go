@@ -250,6 +250,10 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister, privateKey
 	xp.privateKey = privateKey
 	xp.publicKeys = publicKeys
 
+	xp.suspectSet = make(map[[32]byte]SuspectMessage)
+	xp.vcSet = make(map[[32]byte]ViewChangeMessage)
+	xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage)
+
 	xp.generateSynchronousGroup(int64(xp.getLeader()))
 	xp.readPersist(persister.ReadXPaxosState())
 	xp.mu.Unlock()
