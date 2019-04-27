@@ -10,18 +10,25 @@ func TestCommonCase1(t *testing.T) {
 	cfg := makeConfig(t, servers, false)
 	defer cfg.cleanup()
 
-	cfg.net.SetFaultRate(2, 40)
+	cfg.net.SetFaultRate(2, 100)
 
 	fmt.Println("Test: Common Case (t=1)")
 
-	iters := 3
+	iters := 1
 	for i := 0; i < iters; i++ {
+		fmt.Println(cfg.xpServers[1].view)
+		fmt.Println(cfg.xpServers[2].view)
+		fmt.Println(cfg.xpServers[3].view)
 		cfg.client.Propose(nil)
+		fmt.Println(cfg.xpServers[1].view)
+		fmt.Println(cfg.xpServers[2].view)
+		fmt.Println(cfg.xpServers[3].view)
 		comparePrepareSeqNums(cfg)
 		compareExecuteSeqNums(cfg)
 		comparePrepareLogEntries(cfg)
 		compareCommitLogEntries(cfg)
 	}
+
 }
 
 func TestCommonCase2(t *testing.T) {
