@@ -11,17 +11,22 @@ import (
 // ---------------------------- REPLICATE/REPLY RPC ---------------------------
 //
 func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
+	// By default reply.IsLeader == false and reply.Success == false
+	msgDigest := digest(request)
+	signature := xp.sign(msgDigest)
+	reply.MsgDigest = msgDigest
+	reply.Signature = signature
+
 	if xp.id == xp.getLeader() { // If XPaxos server is the leader
-		if len(xp.prepareLog) > 0 && request.Timestamp <= xp.prepareLog[len(xp.prepareLog)-1].Msg0.ClientTimestamp {
-			reply.IsLeader = true
-			reply.Success = false
+		reply.IsLeader = true
+
+		xp.mu.Lock()
+		if len(xp.prepareLog) > 0 && request.Timestamp < xp.prepareLog[len(xp.prepareLog)-1].Msg0.ClientTimestamp {
+			xp.mu.Unlock()
 			return
 		}
 
-		xp.mu.Lock()
 		xp.prepareSeqNum++
-		msgDigest := digest(request)
-		signature := xp.sign(msgDigest)
 
 		msg := Message{
 			MsgType:         PREPARE,
@@ -38,8 +43,8 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 		msgMap[xp.id] = msg // Leader's prepare message
 		xp.appendToCommitLog(request, msgMap)
 
+		numReplies := len(xp.synchronousGroup) - 1
 		replyCh := make(chan bool, len(xp.synchronousGroup)-1)
-		xp.mu.Unlock()
 
 		for server, _ := range xp.synchronousGroup {
 			if server != xp.id {
@@ -47,18 +52,26 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 			}
 		}
 
-		for i := 0; i < len(xp.synchronousGroup)-1; i++ {
-			<-replyCh
+		xp.persist()
+		xp.mu.Unlock()
+
+		timer := time.NewTimer(TIMEOUT * time.Millisecond).C
+
+		for i := 0; i < numReplies; i++ {
+			select {
+			case <-timer:
+				iPrintf("Timeout: XPaxos.Replicate: XPaxos server (%d)\n", xp.id)
+				return
+			case <-replyCh:
+			}
 		}
 
 		xp.mu.Lock()
 		xp.executeSeqNum++
-		reply.IsLeader = true
-		reply.Success = true
+		xp.persist()
 		xp.mu.Unlock()
-	} else {
-		reply.IsLeader = false
-		reply.Success = false
+
+		reply.Success = true
 	}
 }
 

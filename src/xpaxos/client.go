@@ -47,7 +47,7 @@ func (client *Client) Propose(op interface{}) { // For simplicity, we assume the
 
 	select {
 	case <-timer:
-		iPrintf("Timeout: client server (%d)\n", CLIENT)
+		iPrintf("Timeout: Client.Propose: client server (%d)\n", CLIENT)
 	case <-replyCh:
 		iPrintf("Success: committed request (%d)\n", client.timestamp)
 	}
