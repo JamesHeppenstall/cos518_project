@@ -212,7 +212,7 @@ func (rn *Network) ProcessReq(req reqMsg) {
 		// failure when sending to destination
 		if (rand.Int()%100) < rn.faultRate[servername] {
 			// drop the request, return as if timeout
-			log.Printf("Couldn't connect from Server (%d) to Server (%d)\n", req.callerId, servername)
+			dPrintf("Network: couldn't connect XPaxos server (%d) to XPaxos server (%d)\n", req.callerId, servername)
 			time.Sleep(time.Duration(DELTA) * time.Millisecond)
 			req.replyCh <- replyMsg{false, nil}
 			return
@@ -240,7 +240,7 @@ func (rn *Network) ProcessReq(req reqMsg) {
 				// failure when sending response to source
 				if (rand.Int()%100) < rn.faultRate[req.callerId]  {
 					// drop the request, return as if timeout
-					log.Printf("Couldn't connect from Server (%d) to Server (%d)\n", servername, req.callerId)
+					dPrintf("Network: couldn't connect XPaxos server (%d) to XPaxos server (%d)\n", servername, req.callerId)
 					time.Sleep(time.Duration(DELTA) * time.Millisecond)
 					req.replyCh <- replyMsg{false, nil}
 					return
