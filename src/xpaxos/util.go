@@ -37,6 +37,23 @@ func checkError(err error) {
 }
 
 //
+// ----------------------------- PERSISTER FUNCTIONS --------------------------
+//
+func (xp *XPaxos) persist() { // TODO
+	buf := new(bytes.Buffer)
+	enc := gob.NewEncoder(buf)
+	enc.Encode(0)
+	data := buf.Bytes()
+	xp.persister.SaveXPaxosState(data)
+}
+
+func (xp *XPaxos) readPersist(data []byte) { // TODO
+	buf := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(buf)
+	dec.Decode(0)
+}
+
+//
 // ------------------------------ CRYPTO FUNCTIONS ----------------------------
 //
 func digest(msg interface{}) [32]byte { // Crypto message digest
@@ -67,28 +84,18 @@ func (xp *XPaxos) verify(server int, msgDigest [32]byte, signature []byte) bool 
 //
 // ------------------------------ HELPER FUNCTIONS ----------------------------
 //
-func (xp *XPaxos) getState() (int, bool) {
-	xp.mu.Lock()
-	defer xp.mu.Unlock()
-
-	isLeader := false
-	view := xp.view
-
-	if xp.id == view {
-		isLeader = true
-	}
-
-	return view, isLeader
+func (xp *XPaxos) getLeader() int {
+	return ((xp.view - 1) % (len(xp.replicas) - 1)) + 1
 }
 
 func (xp *XPaxos) generateSynchronousGroup(seed int64) {
 	r := rand.New(rand.NewSource(seed))
 	numAdded := 0
 
-	xp.synchronousGroup[xp.view] = true
+	xp.synchronousGroup[xp.getLeader()] = true
 
 	for _, server := range r.Perm(len(xp.replicas)) {
-		if server != CLIENT && server != xp.view && numAdded < (len(xp.replicas)-1)/2 {
+		if server != CLIENT && server != xp.getLeader() && numAdded < (len(xp.replicas)-1)/2 {
 			xp.synchronousGroup[server] = true
 			numAdded++
 		}
@@ -108,14 +115,6 @@ func (xp *XPaxos) appendToPrepareLog(request ClientRequest, msg Message) Prepare
 	return prepareEntry
 }
 
-func (xp *XPaxos) updatePrepareLog(request ClientRequest, msg Message, sn int) {
-	prepareEntry := PrepareLogEntry{
-		Request: request,
-		Msg0: msg}
-
-	xp.prepareLog[sn] = prepareEntry
-}
-
 func (xp *XPaxos) appendToCommitLog(request ClientRequest, msgMap map[int]Message) {
 	commitEntry := CommitLogEntry{
 		Request: request,
@@ -123,6 +122,14 @@ func (xp *XPaxos) appendToCommitLog(request ClientRequest, msgMap map[int]Messag
 		View:    xp.view}
 
 	xp.commitLog = append(xp.commitLog, commitEntry)
+}
+
+func (xp *XPaxos) updatePrepareLog(prepareSeqNum int, request ClientRequest, msg Message) {
+	prepareEntry := PrepareLogEntry{
+		Request: request,
+		Msg0:    msg}
+
+	xp.prepareLog[prepareSeqNum] = prepareEntry
 }
 
 func (xp *XPaxos) compareLogs(prepareLog []PrepareLogEntry, commitLog []CommitLogEntry) bool {
@@ -134,8 +141,8 @@ func (xp *XPaxos) compareLogs(prepareLog []PrepareLogEntry, commitLog []CommitLo
 	if len(prepareLog) != len(commitLog) {
 		return false
 	} else {
-		for sn, prepareEntry := range prepareLog {
-			commitEntryMsg = commitLog[sn].Msg0[xp.getLeader()]
+		for seqNum, prepareEntry := range prepareLog {
+			commitEntryMsg = commitLog[seqNum].Msg0[xp.getLeader()]
 
 			check1 = (prepareEntry.Msg0.MsgDigest == commitEntryMsg.MsgDigest)
 			check2 = (prepareEntry.Msg0.PrepareSeqNum == commitEntryMsg.PrepareSeqNum)
@@ -147,22 +154,4 @@ func (xp *XPaxos) compareLogs(prepareLog []PrepareLogEntry, commitLog []CommitLo
 		}
 		return true
 	}
-}
-
-func (xp *XPaxos) getLeader() int {
-	return (xp.view % (len(xp.replicas) - 1)) + 1
-}
-
-func (xp *XPaxos) persist() {
-	buf := new(bytes.Buffer)
-	enc := gob.NewEncoder(buf)
-	enc.Encode(0)
-	data := buf.Bytes()
-	xp.persister.SaveXPaxosState(data)
-}
-
-func (xp *XPaxos) readPersist(data []byte) {
-	buf := bytes.NewBuffer(data)
-	dec := gob.NewDecoder(buf)
-	dec.Decode(0)
 }

@@ -10,8 +10,8 @@ import (
 //
 // ---------------------------- REPLICATE/REPLY RPC ---------------------------
 //
-func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
-	if xp.id == xp.view { // If XPaxos server is the leader
+func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
+	if xp.id == xp.getLeader() { // If XPaxos server is the leader
 		if len(xp.prepareLog) > 0 && request.Timestamp <= xp.prepareLog[len(xp.prepareLog)-1].Msg0.ClientTimestamp {
 			reply.IsLeader = true
 			reply.Success = false
@@ -30,7 +30,7 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 			PrepareSeqNum:   xp.prepareSeqNum,
 			View:            xp.view,
 			ClientTimestamp: request.Timestamp,
-			ServerId:        xp.id}
+			SenderId:        xp.id}
 
 		prepareEntry := xp.appendToPrepareLog(request, msg)
 
@@ -65,13 +65,13 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *ReplicateReply) {
 //
 // -------------------------------- PREPARE RPC -------------------------------
 //
-func (xp *XPaxos) sendPrepare(server int, prepareEntry PrepareLogEntry, reply *PrepareReply) bool {
+func (xp *XPaxos) sendPrepare(server int, prepareEntry PrepareLogEntry, reply *Reply) bool {
 	dPrintf("Prepare: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.Prepare", prepareEntry, reply, xp.id)
 }
 
 func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh chan bool) {
-	reply := &PrepareReply{}
+	reply := &Reply{}
 
 	if ok := xp.sendPrepare(server, prepareEntry, reply); ok {
 		if bytes.Compare(prepareEntry.Msg0.MsgDigest[:], reply.MsgDigest[:]) == 0 && xp.verify(server, reply.MsgDigest,
@@ -85,7 +85,7 @@ func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh
 	}
 }
 
-func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *PrepareReply) {
+func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
 
@@ -95,7 +95,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *PrepareReply) {
 	reply.Signature = signature
 
 	if prepareEntry.Msg0.PrepareSeqNum == xp.prepareSeqNum+1 && bytes.Compare(prepareEntry.Msg0.MsgDigest[:],
-		msgDigest[:]) == 0 && xp.verify(prepareEntry.Msg0.ServerId, msgDigest, prepareEntry.Msg0.Signature) == true {
+		msgDigest[:]) == 0 && xp.verify(prepareEntry.Msg0.SenderId, msgDigest, prepareEntry.Msg0.Signature) == true {
 		xp.prepareSeqNum++
 		xp.prepareLog = append(xp.prepareLog, prepareEntry)
 
@@ -106,12 +106,12 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *PrepareReply) {
 			PrepareSeqNum:   xp.prepareSeqNum,
 			View:            xp.view,
 			ClientTimestamp: prepareEntry.Request.Timestamp,
-			ServerId:        xp.id}
+			SenderId:        xp.id}
 
 		if xp.executeSeqNum >= len(xp.commitLog) {
 			msgMap := make(map[int]Message, 0)
-			msgMap[xp.view] = prepareEntry.Msg0 // Leader's prepare message
-			msgMap[xp.id] = msg                 // Follower's commit message
+			msgMap[xp.getLeader()] = prepareEntry.Msg0 // Leader's prepare message
+			msgMap[xp.id] = msg                        // Follower's commit message
 			xp.appendToCommitLog(prepareEntry.Request, msgMap)
 		}
 
@@ -146,13 +146,13 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *PrepareReply) {
 //
 // --------------------------------- COMMIT RPC --------------------------------
 //
-func (xp *XPaxos) sendCommit(server int, msg Message, reply *CommitReply) bool {
+func (xp *XPaxos) sendCommit(server int, msg Message, reply *Reply) bool {
 	dPrintf("Commit: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.Commit", msg, reply, xp.id)
 }
 
 func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
-	reply := &CommitReply{}
+	reply := &Reply{}
 
 	if ok := xp.sendCommit(server, msg, reply); ok {
 		if bytes.Compare(msg.MsgDigest[:], reply.MsgDigest[:]) == 0 && xp.verify(server, reply.MsgDigest,
@@ -166,7 +166,7 @@ func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
 	}
 }
 
-func (xp *XPaxos) Commit(msg Message, reply *CommitReply) {
+func (xp *XPaxos) Commit(msg Message, reply *Reply) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
 
@@ -175,10 +175,10 @@ func (xp *XPaxos) Commit(msg Message, reply *CommitReply) {
 	reply.MsgDigest = msgDigest
 	reply.Signature = signature
 
-	if xp.verify(msg.ServerId, msgDigest, msg.Signature) == true {
+	if xp.verify(msg.SenderId, msgDigest, msg.Signature) == true {
 		if xp.executeSeqNum < len(xp.commitLog) {
-			serverId := msg.ServerId
-			xp.commitLog[xp.executeSeqNum].Msg0[serverId] = msg
+			senderId := msg.SenderId
+			xp.commitLog[xp.executeSeqNum].Msg0[senderId] = msg
 			reply.Success = true
 		} else {
 			reply.Success = false
@@ -206,7 +206,7 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister, privateKey
 	xp.privateKey = privateKey
 	xp.publicKeys = publicKeys
 
-	xp.generateSynchronousGroup(int64(xp.view))
+	xp.generateSynchronousGroup(int64(xp.getLeader()))
 	xp.readPersist(persister.ReadXPaxosState())
 	xp.mu.Unlock()
 
