@@ -97,10 +97,11 @@ type Message struct {
 }
 
 type Reply struct {
-	MsgDigest [32]byte
-	Signature []byte
-	Success   bool
-	IsLeader  bool
+	MsgDigest  [32]byte
+	Signature  []byte
+	Success    bool
+	IsLeader   bool
+	Suspicious bool
 }
 
 type SuspectMessage struct {

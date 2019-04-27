@@ -11,7 +11,7 @@ import (
 // ---------------------------- REPLICATE/REPLY RPC ---------------------------
 //
 func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
-	// By default reply.IsLeader == false and reply.Success == false
+	// By default reply.IsLeader = false and reply.Success = false
 	xp.mu.Lock()
 	msgDigest := digest(request)
 	signature := xp.sign(msgDigest)
@@ -87,11 +87,11 @@ func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh
 	reply := &Reply{}
 
 	if ok := xp.sendPrepare(server, prepareEntry, reply); ok {
-		//xp.mu.Lock()
-		//defer xp.mu.Unlock()
+		xp.mu.Lock()
+		verification := xp.verify(server, reply.MsgDigest, reply.Signature)
+		xp.mu.Unlock()
 
-		if bytes.Compare(prepareEntry.Msg0.MsgDigest[:], reply.MsgDigest[:]) == 0 && xp.verify(server, reply.MsgDigest,
-			reply.Signature) == true {
+		if bytes.Compare(prepareEntry.Msg0.MsgDigest[:], reply.MsgDigest[:]) == 0 && verification == true {
 			if reply.Success == true {
 				replyCh <- reply.Success
 			}
@@ -104,7 +104,7 @@ func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh
 }
 
 func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
-	// By default reply.Success == false
+	// By default reply.Success = false and reply.Suspicious = false
 	xp.mu.Lock()
 	msgDigest := digest(prepareEntry.Request)
 	signature := xp.sign(msgDigest)
@@ -138,7 +138,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 			xp.appendToCommitLog(prepareEntry.Request, msgMap)
 		}
 
-		numReplies := len(xp.synchronousGroup)-1
+		numReplies := len(xp.synchronousGroup) - 1
 		replyCh := make(chan bool, numReplies)
 
 		for server, _ := range xp.synchronousGroup {
@@ -162,7 +162,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 		}
 
 		timer = time.NewTimer(TIMEOUT * time.Millisecond).C
-		
+
 		// Busy wait until XPaxos server receives commit messages from entire synchronous group
 		xp.mu.Lock()
 		for len(xp.commitLog[xp.executeSeqNum].Msg0) != len(xp.synchronousGroup) {
@@ -180,6 +180,9 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 		xp.executeSeqNum++
 		xp.persist()
 		reply.Success = true
+	} else { // Verification of crypto signature in prepareEntry fails
+		reply.Suspicious = true
+		go xp.issueSuspect()
 	}
 	xp.mu.Unlock()
 }
@@ -200,6 +203,8 @@ func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
 			reply.Signature) == true {
 			if reply.Success == true {
 				replyCh <- reply.Success
+			} else if reply.Suspicious == true {
+				return
 			} else {
 				go xp.issueCommit(server, msg, replyCh) // Retransmit if commit RPC fails - DO NOT CHANGE
 			}
@@ -227,6 +232,9 @@ func (xp *XPaxos) Commit(msg Message, reply *Reply) {
 			xp.commitLog[xp.executeSeqNum].Msg0[senderId] = msg
 			reply.Success = true
 		}
+	} else { // Verification of crypto signature in msg fails
+		reply.Suspicious = true
+		go xp.issueSuspect()
 	}
 }
 
@@ -249,10 +257,13 @@ func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister, privateKey
 	xp.commitLog = make([]CommitLogEntry, 0)
 	xp.privateKey = privateKey
 	xp.publicKeys = publicKeys
-
-	xp.suspectSet = make(map[[32]byte]SuspectMessage)
-	xp.vcSet = make(map[[32]byte]ViewChangeMessage)
-	xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage)
+	xp.suspectSet = make(map[[32]byte]SuspectMessage, 0)
+	xp.vcSet = make(map[[32]byte]ViewChangeMessage, 0)
+	xp.netFlag = false
+	xp.netTimer = nil
+	xp.vcFlag = false
+	xp.vcTimer = nil
+	xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
 
 	xp.generateSynchronousGroup(int64(xp.getLeader()))
 	xp.readPersist(persister.ReadXPaxosState())
