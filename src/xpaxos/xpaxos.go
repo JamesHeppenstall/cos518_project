@@ -94,6 +94,8 @@ func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh
 		if bytes.Compare(prepareEntry.Msg0.MsgDigest[:], reply.MsgDigest[:]) == 0 && verification == true {
 			if reply.Success == true {
 				replyCh <- reply.Success
+			} else if reply.Suspicious == true {
+				return
 			}
 		} else { // Verification of crypto signature in reply fails
 			go xp.issueSuspect()
@@ -199,8 +201,11 @@ func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
 	reply := &Reply{}
 
 	if ok := xp.sendCommit(server, msg, reply); ok {
-		if bytes.Compare(msg.MsgDigest[:], reply.MsgDigest[:]) == 0 && xp.verify(server, reply.MsgDigest,
-			reply.Signature) == true {
+		xp.mu.Lock()
+		verification := xp.verify(server, reply.MsgDigest, reply.Signature)
+		xp.mu.Unlock()
+
+		if bytes.Compare(msg.MsgDigest[:], reply.MsgDigest[:]) == 0 && verification == true {
 			if reply.Success == true {
 				replyCh <- reply.Success
 			} else if reply.Suspicious == true {
@@ -230,6 +235,7 @@ func (xp *XPaxos) Commit(msg Message, reply *Reply) {
 		if xp.executeSeqNum < len(xp.commitLog) {
 			senderId := msg.SenderId
 			xp.commitLog[xp.executeSeqNum].Msg0[senderId] = msg
+			xp.persist()
 			reply.Success = true
 		}
 	} else { // Verification of crypto signature in msg fails
