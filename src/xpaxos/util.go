@@ -135,7 +135,7 @@ func (xp *XPaxos) updatePrepareLog(prepareSeqNum int, request ClientRequest, msg
 
 func (xp *XPaxos) compareLogs(prepareLog []PrepareLogEntry, commitLog []CommitLogEntry) bool {
 	var commitEntryMsg Message
-	var check1 bool
+	var check1 int
 	var check2 bool
 	var check3 bool
 
@@ -145,11 +145,16 @@ func (xp *XPaxos) compareLogs(prepareLog []PrepareLogEntry, commitLog []CommitLo
 		for seqNum, prepareEntry := range prepareLog {
 			commitEntryMsg = commitLog[seqNum].Msg0[xp.getLeader()]
 
-			check1 = (prepareEntry.Msg0.MsgDigest == commitEntryMsg.MsgDigest)
-			check2 = (prepareEntry.Msg0.PrepareSeqNum == commitEntryMsg.PrepareSeqNum)
-			check3 = (prepareEntry.Msg0.View == commitEntryMsg.View)
+			iPrintf("%v\n", prepareEntry.Msg0.MsgDigest)
+			iPrintf("%v\n", commitEntryMsg.MsgDigest)
 
-			if check1 != true || check2 != true || check3 != true {
+			check1 = bytes.Compare(prepareEntry.Msg0.MsgDigest[:], commitEntryMsg.MsgDigest[:])
+			check2 = (prepareEntry.Msg0.PrepareSeqNum == commitEntryMsg.PrepareSeqNum)
+			check3 = (prepareEntry.Msg0.ClientTimestamp == commitEntryMsg.ClientTimestamp)
+
+			iPrintf("%v, %v, %v\n", check1, check2, check3)
+
+			if check1 != 0 || check2 != true || check3 != true {
 				return false
 			}
 		}

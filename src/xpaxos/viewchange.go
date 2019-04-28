@@ -83,7 +83,7 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 // ------------------------------ VIEW-CHANGE RPC -----------------------------
 //
 func (xp *XPaxos) sendViewChange(server int, msg ViewChangeMessage, reply *Reply) bool {
-	iPrintf("ViewChange: from XPaxos server (%d) to XPaxos server (%d) %d %v\n", xp.id, server, xp.view, xp.synchronousGroup)
+	dPrintf("ViewChange: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.ViewChange", msg, reply, xp.id)
 }
 
@@ -99,8 +99,6 @@ func (xp *XPaxos) issueViewChange() {
 	reply := &Reply{}
 
 	for server, _ := range xp.synchronousGroup {
-		iPrintf("%d %d %v\n", server, xp.id, xp.synchronousGroup)
-
 		xp.mu.Unlock()
 
 		go xp.sendViewChange(server, msg, reply)
@@ -135,7 +133,6 @@ func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 		xp.mu.Unlock()
 
 		<-xp.netTimer
-		iPrintf("%d %d", len(xp.vcSet), xp.id)
 
 		xp.mu.Lock()
 		if xp.netFlag == false && len(xp.vcSet) >= (len(xp.replicas)+1)/2 {
@@ -166,7 +163,7 @@ func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 // -------------------------------- VC-FINAL RPC ------------------------------
 //
 func (xp *XPaxos) sendVCFinal(server int, msg VCFinalMessage, reply *Reply) bool {
-	iPrintf("VCFinal: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
+	dPrintf("VCFinal: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.VCFinal", msg, reply, xp.id)
 }
 
@@ -195,14 +192,10 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
 
-	//iPrintf("HERE1 %d %d\n", xp.view, xp.id)
-
 	if xp.synchronousGroup[msg.SenderId] == true {
 		xp.receivedVCFinal[msg.SenderId] = msg.VCSet
-		iPrintf("HERE2 %d %d %d\n", xp.view, xp.id, len(xp.receivedVCFinal))
 
 		if len(xp.receivedVCFinal) >= len(xp.synchronousGroup) {
-			iPrintf("HERE3 %d %d\n", xp.view, xp.id)
 			for _, msg := range msg.VCSet {
 				xp.vcSet[digest(msg)] = msg
 			}
@@ -237,13 +230,13 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 						MsgType:         PREPARE,
 						MsgDigest:       msgDigest,
 						Signature:       signature,
-						PrepareSeqNum:   sn,
+						PrepareSeqNum:   sn+1,
 						View:            xp.view,
 						ClientTimestamp: msg0.ClientTimestamp,
 						SenderId:        msg0.SenderId}
 
-					if sn < len(xp.prepareLog) { 
-						xp.updatePrepareLog(sn, request, newMsg0)
+					if sn < len(xp.prepareLog)-1 { 
+						xp.updatePrepareLog(sn+1, request, newMsg0)
 					} else {
 						xp.appendToPrepareLog(request, newMsg0)
 					}
@@ -258,7 +251,7 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 // -------------------------------- NEW-VIEW RPC ------------------------------
 //
 func (xp *XPaxos) sendNewView(server int, msg NewViewMessage, reply *Reply) bool {
-	dPrintf("NewView: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
+	iPrintf("NewView: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.NewView", msg, reply, xp.id)
 }
 
@@ -281,12 +274,14 @@ func (xp *XPaxos) NewView(msg NewViewMessage, reply *Reply) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
 
+	iPrintf("%v %v\n", msg.PrepareLog, xp.commitLog)
+
 	if xp.compareLogs(msg.PrepareLog, xp.commitLog) {
 		xp.prepareLog = msg.PrepareLog
 		xp.prepareSeqNum = len(xp.prepareLog) - 1
 		xp.executeSeqNum = len(xp.commitLog) - 1
 		xp.vcFlag = true
-	} else {
-		go xp.issueSuspect()
-	}
+	}// else {
+	//	go xp.issueSuspect()
+	//}
 }

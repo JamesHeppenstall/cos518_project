@@ -10,7 +10,7 @@ func TestCommonCase1(t *testing.T) {
 	cfg := makeConfig(t, servers, false)
 	defer cfg.cleanup()
 
-	cfg.net.SetFaultRate(2, 100)
+	//cfg.net.SetFaultRate(2, 100)
 
 	fmt.Println("Test: Common Case (t=1)")
 
