@@ -116,25 +116,26 @@ func (xp *XPaxos) appendToPrepareLog(request ClientRequest, msg Message) Prepare
 	return prepareEntry
 }
 
-func (xp *XPaxos) appendToCommitLog(request ClientRequest, msgMap map[int]Message) {
+func (xp *XPaxos) appendToCommitLog(request ClientRequest, msg Message, msgMap map[int]Message) {
 	commitEntry := CommitLogEntry{
 		Request: request,
-		Msg0:    msgMap,
+		Msg0:    msg,
+		Msg1:    msgMap,
 		View:    xp.view}
 
 	xp.commitLog = append(xp.commitLog, commitEntry)
 }
 
-func (xp *XPaxos) updatePrepareLog(prepareSeqNum int, request ClientRequest, msg Message) {
+func (xp *XPaxos) updatePrepareLog(seqNum int, request ClientRequest, msg Message) {
 	prepareEntry := PrepareLogEntry{
 		Request: request,
 		Msg0:    msg}
 
-	xp.prepareLog[prepareSeqNum] = prepareEntry
+	xp.prepareLog[seqNum] = prepareEntry
 }
 
 func (xp *XPaxos) compareLogs(prepareLog []PrepareLogEntry, commitLog []CommitLogEntry) bool {
-	var commitEntryMsg Message
+	var commitEntryMsg0 Message
 	var check1 int
 	var check2 bool
 	var check3 bool
@@ -143,16 +144,11 @@ func (xp *XPaxos) compareLogs(prepareLog []PrepareLogEntry, commitLog []CommitLo
 		return false
 	} else {
 		for seqNum, prepareEntry := range prepareLog {
-			commitEntryMsg = commitLog[seqNum].Msg0[xp.getLeader()]
+			commitEntryMsg0 = commitLog[seqNum].Msg0
 
-			iPrintf("%v\n", prepareEntry.Msg0.MsgDigest)
-			iPrintf("%v\n", commitEntryMsg.MsgDigest)
-
-			check1 = bytes.Compare(prepareEntry.Msg0.MsgDigest[:], commitEntryMsg.MsgDigest[:])
-			check2 = (prepareEntry.Msg0.PrepareSeqNum == commitEntryMsg.PrepareSeqNum)
-			check3 = (prepareEntry.Msg0.ClientTimestamp == commitEntryMsg.ClientTimestamp)
-
-			iPrintf("%v, %v, %v\n", check1, check2, check3)
+			check1 = bytes.Compare(prepareEntry.Msg0.MsgDigest[:], commitEntryMsg0.MsgDigest[:])
+			check2 = (prepareEntry.Msg0.PrepareSeqNum == commitEntryMsg0.PrepareSeqNum)
+			check3 = (prepareEntry.Msg0.ClientTimestamp == commitEntryMsg0.ClientTimestamp)
 
 			if check1 != 0 || check2 != true || check3 != true {
 				return false

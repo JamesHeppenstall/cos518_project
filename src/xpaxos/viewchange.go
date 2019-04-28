@@ -51,12 +51,12 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 	if xp.view <= msg.View && ok == false {
 		xp.suspectSet[digest(msg)] = msg
 		xp.mu.Unlock()
-		
+
 		go xp.forwardSuspect(msg)
 
 		xp.mu.Lock()
 		if xp.view == msg.View {
-			xp.view++	
+			xp.view++
 		} else {
 			xp.view = msg.View
 		}
@@ -109,7 +109,7 @@ func (xp *XPaxos) issueViewChange() {
 
 func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 	xp.mu.Lock()
-	
+
 	if xp.view <= msg.View {
 		xp.vcSet[digest(msg)] = msg
 		if len(xp.vcSet) == len(xp.replicas)-1 {
@@ -151,7 +151,7 @@ func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 				}
 			}(xp)
 		} else if xp.netFlag == false {
-			xp.vcFlag = true 
+			xp.vcFlag = true
 			go xp.issueSuspect()
 		}
 	}
@@ -221,7 +221,7 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 
 				for sn, _ := range xp.commitLog {
 					request = xp.commitLog[sn].Request
-					msg0 = xp.commitLog[sn].Msg0[xp.id]
+					msg0 = xp.commitLog[sn].Msg0
 
 					msgDigest = digest(request)
 					signature = xp.sign(msgDigest)
@@ -230,13 +230,13 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 						MsgType:         PREPARE,
 						MsgDigest:       msgDigest,
 						Signature:       signature,
-						PrepareSeqNum:   sn+1,
+						PrepareSeqNum:   sn + 1,
 						View:            xp.view,
 						ClientTimestamp: msg0.ClientTimestamp,
 						SenderId:        msg0.SenderId}
 
-					if sn < len(xp.prepareLog)-1 { 
-						xp.updatePrepareLog(sn+1, request, newMsg0)
+					if sn < len(xp.prepareLog) {
+						xp.updatePrepareLog(sn, request, newMsg0)
 					} else {
 						xp.appendToPrepareLog(request, newMsg0)
 					}
@@ -281,7 +281,7 @@ func (xp *XPaxos) NewView(msg NewViewMessage, reply *Reply) {
 		xp.prepareSeqNum = len(xp.prepareLog) - 1
 		xp.executeSeqNum = len(xp.commitLog) - 1
 		xp.vcFlag = true
-	}// else {
+	} // else {
 	//	go xp.issueSuspect()
 	//}
 }

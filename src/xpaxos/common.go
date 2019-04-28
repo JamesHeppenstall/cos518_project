@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-const DEBUG = 1      // Debugging (0 = None, 1 = Info, 2 = Debug)
-const CLIENT = 0     // Client ID is always set to zero - DO NOT CHANGE
+const DEBUG = 1       // Debugging (0 = None, 1 = Info, 2 = Debug)
+const CLIENT = 0      // Client ID is always set to zero - DO NOT CHANGE
 const TIMEOUT = 10000 // Client timeout period (in milliseconds)
-const BITSIZE = 1024 // RSA private key bit size
+const BITSIZE = 1024  // RSA private key bit size
 
 const ( // RPC message types for common case and view change protocols
 	REPLICATE  = iota
@@ -75,7 +75,8 @@ type PrepareLogEntry struct {
 
 type CommitLogEntry struct {
 	Request ClientRequest
-	Msg0    map[int]Message
+	Msg0    Message
+	Msg1    map[int]Message
 	View    int
 }
 

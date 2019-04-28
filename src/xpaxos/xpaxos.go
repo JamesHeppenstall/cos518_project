@@ -41,8 +41,8 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 		prepareEntry := xp.appendToPrepareLog(request, msg)
 
 		msgMap := make(map[int]Message, 0)
-		msgMap[xp.id] = msg // Leader's prepare message
-		xp.appendToCommitLog(request, msgMap)
+		//msgMap[xp.id] = msg // Leader's prepare message
+		xp.appendToCommitLog(request, msg, msgMap)
 
 		numReplies := len(xp.synchronousGroup) - 1
 		replyCh := make(chan bool, numReplies)
@@ -140,9 +140,9 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 
 		if xp.executeSeqNum >= len(xp.commitLog) {
 			msgMap := make(map[int]Message, 0)
-			msgMap[xp.getLeader()] = prepareEntry.Msg0 // Leader's prepare message
-			msgMap[xp.id] = msg                        // Follower's commit message
-			xp.appendToCommitLog(prepareEntry.Request, msgMap)
+			//msgMap[xp.getLeader()] = prepareEntry.Msg0 // Leader's prepare message
+			msgMap[xp.id] = msg // Follower's commit message
+			xp.appendToCommitLog(prepareEntry.Request, prepareEntry.Msg0, msgMap)
 		}
 
 		numReplies := len(xp.synchronousGroup) - 1
@@ -172,7 +172,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 
 		// Busy wait until XPaxos server receives commit messages from entire synchronous group
 		xp.mu.Lock()
-		for len(xp.commitLog[xp.executeSeqNum].Msg0) != len(xp.synchronousGroup) {
+		for len(xp.commitLog[xp.executeSeqNum].Msg1) != len(xp.synchronousGroup)-1 {
 			xp.mu.Unlock()
 			select {
 			case <-timer:
@@ -244,7 +244,7 @@ func (xp *XPaxos) Commit(msg Message, reply *Reply) {
 	if xp.verify(msg.SenderId, msgDigest, msg.Signature) == true {
 		if xp.executeSeqNum < len(xp.commitLog) {
 			senderId := msg.SenderId
-			xp.commitLog[xp.executeSeqNum].Msg0[senderId] = msg
+			xp.commitLog[xp.executeSeqNum].Msg1[senderId] = msg
 			xp.persist()
 			reply.Success = true
 		}
