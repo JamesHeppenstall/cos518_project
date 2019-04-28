@@ -6,7 +6,7 @@ import (
 )
 
 const DEBUG = 1   // Debugging (0 = None, 1 = Info, 2 = Debug)
-const DELTA = 500 // Network time frame delta for XPaxos synchronous group
+const DELTA = 100 // Network time frame delta for XPaxos synchronous group
 
 type Network struct {
 	mu             sync.Mutex

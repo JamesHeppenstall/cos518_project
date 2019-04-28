@@ -63,7 +63,7 @@ func TestNetworkPartition1(t *testing.T) {
 	}
 }
 
-func TestNetworkPartition2(t *testing.T) { // THIS TEST IS SOMETIMES FAILING
+func TestNetworkPartition2(t *testing.T) { // THIS TEST IS VERY RARELY FAILS
 	servers := 5
 	cfg := makeConfig(t, servers, false)
 	defer cfg.cleanup()
@@ -73,15 +73,15 @@ func TestNetworkPartition2(t *testing.T) { // THIS TEST IS SOMETIMES FAILING
 
 	fmt.Println("Test: Network Partition (t>1)")
 
-	iters := 1
+	iters := 3
 	for i := 0; i < iters; i++ {
-		for j := 1; j < servers; j++ {
-			fmt.Println(cfg.xpServers[j].view)
-		}
+		//for j := 1; j < servers; j++ {
+		//	fmt.Println(cfg.xpServers[j].view)
+		//}
 		cfg.client.Propose(nil)
-		for j := 1; j < servers; j++ {
-			fmt.Println(cfg.xpServers[j].view)
-		}
+		//for j := 1; j < servers; j++ {
+		//	fmt.Println(cfg.xpServers[j].view)
+		//}
 		comparePrepareSeqNums(cfg)
 		compareExecuteSeqNums(cfg)
 		comparePrepareLogEntries(cfg)
