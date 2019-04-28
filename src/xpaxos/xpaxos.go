@@ -1,5 +1,22 @@
 package xpaxos
 
+// RPC handlers for the XPaxos common case (replicate, prepare, commit, reply)
+// XPaxos operates under a system model called Cross Fault-Tolerance (XFT) that lies
+// between Crash Fault-Tolerance (CFT) and Byzantine Fault-Tolerance (BFT)
+//
+// XFT Assumptions:
+// (1) Clients and replicas can suffer Byzantine faults
+// (2) All replicas share reliable bi-directional communication channels
+// (3) An *eventually synchronous* network model (i.e. there always exists a majority
+//     of replicas - a synchronous group - that can send RPCs within some time frame
+//     delta)
+//
+// We simulate a network in the eponymous package - in particular, this allows gives us
+// fine-grained control over the time frame delta (defined in network/common.go - line 9)
+//
+// xp := Make(replicas, id, persister, privateKey, publicKeys) - Creates an XPaxos server
+// => Option to perform cleanup with xp.Kill()
+
 import (
 	"bytes"
 	"crypto/rsa"
@@ -29,7 +46,7 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 
 		xp.prepareSeqNum++
 
-		msg := Message{
+		msg := Message{ // Leader's prepare message
 			MsgType:         PREPARE,
 			MsgDigest:       msgDigest,
 			Signature:       signature,
@@ -41,7 +58,6 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 		prepareEntry := xp.appendToPrepareLog(request, msg)
 
 		msgMap := make(map[int]Message, 0)
-		//msgMap[xp.id] = msg // Leader's prepare message
 		xp.appendToCommitLog(request, msg, msgMap)
 
 		numReplies := len(xp.synchronousGroup) - 1
@@ -140,9 +156,8 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 
 		if xp.executeSeqNum >= len(xp.commitLog) {
 			msgMap := make(map[int]Message, 0)
-			//msgMap[xp.getLeader()] = prepareEntry.Msg0 // Leader's prepare message
-			msgMap[xp.id] = msg // Follower's commit message
-			xp.appendToCommitLog(prepareEntry.Request, prepareEntry.Msg0, msgMap)
+			msgMap[xp.id] = msg                                                   // Follower's commit message
+			xp.appendToCommitLog(prepareEntry.Request, prepareEntry.Msg0, msgMap) // Leader's prepare message is prepareEntry.Msg0
 		}
 
 		numReplies := len(xp.synchronousGroup) - 1

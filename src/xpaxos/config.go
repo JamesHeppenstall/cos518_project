@@ -35,16 +35,13 @@ func makeConfig(t *testing.T, n int, unreliable bool) *config {
 
 	cfg.net.LongDelays(false)
 
-	// Create client server
-	cfg.startClient()
+	cfg.startClient() // Create client server
 
-	// Create a full set of XPaxos servers
-	for i := 1; i < cfg.n; i++ {
+	for i := 1; i < cfg.n; i++ { // Create a full set of XPaxos servers
 		cfg.start1(i)
 	}
 
-	// Connect everyone
-	for i := 0; i < cfg.n; i++ {
+	for i := 0; i < cfg.n; i++ { // Connect everyone
 		cfg.connect(i)
 	}
 
@@ -217,16 +214,14 @@ func (cfg *config) connect(i int) {
 
 	cfg.connected[i] = true
 
-	// Outgoing ClientEnds
-	for j := 0; j < cfg.n; j++ {
+	for j := 0; j < cfg.n; j++ { // Outgoing ClientEnds
 		if cfg.connected[j] {
 			endname := cfg.endnames[i][j]
 			cfg.net.Enable(endname, true)
 		}
 	}
 
-	// Incoming ClientEnds
-	for j := 0; j < cfg.n; j++ {
+	for j := 0; j < cfg.n; j++ { // Incoming ClientEnds
 		if cfg.connected[j] {
 			endname := cfg.endnames[j][i]
 			cfg.net.Enable(endname, true)
@@ -246,16 +241,14 @@ func (cfg *config) disconnect(i int) {
 
 	cfg.connected[i] = false
 
-	// Outgoing ClientEnds
-	for j := 0; j < cfg.n; j++ {
+	for j := 0; j < cfg.n; j++ { // Outgoing ClientEnds
 		if cfg.endnames[i] != nil {
 			endname := cfg.endnames[i][j]
 			cfg.net.Enable(endname, false)
 		}
 	}
 
-	// Incoming ClientEnds
-	for j := 0; j < cfg.n; j++ {
+	for j := 0; j < cfg.n; j++ { // Incoming ClientEnds
 		if cfg.endnames[j] != nil {
 			endname := cfg.endnames[j][i]
 			cfg.net.Enable(endname, false)

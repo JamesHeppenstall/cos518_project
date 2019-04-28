@@ -1,5 +1,10 @@
 package xpaxos
 
+// RPC handlers for an XPaxos client server (propose)
+//
+// client := MakeClient(replicas) - Creates an XPaxos client server
+// => Option to perform cleanup with xp.Kill()
+
 import (
 	"network"
 	"time"

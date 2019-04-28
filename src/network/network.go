@@ -5,7 +5,7 @@ package network
 //
 // Originally written for MIT's 6.824 (Distributed Systems) course and modified for use as
 // a controlled network environment in our Princeton COS 518 (Advanced Computer Systems)
-// final project
+// final project because XPaxos assumes a *strong* network model
 //
 // net := MakeNetwork()              - Holds network, clients, servers
 // end := net.MakeEnd(endname)       - Create a client endpoint to talk to one server
