@@ -77,7 +77,7 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 		for i := 0; i < numReplies; i++ {
 			select {
 			case <-timer:
-				iPrintf("Timeout: XPaxos.Replicate: XPaxos server (%d)\n", xp.id)
+				dPrintf("Timeout: XPaxos.Replicate: XPaxos server (%d)\n", xp.id)
 				return
 			case <-replyCh:
 			}
@@ -188,7 +188,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 		for i := 0; i < numReplies; i++ {
 			select {
 			case <-timer:
-				iPrintf("Timeout: XPaxos.Prepare: XPaxos server (%d)\n", xp.id)
+				dPrintf("Timeout: XPaxos.Prepare: XPaxos server (%d)\n", xp.id)
 				return
 			case <-replyCh:
 			}
@@ -202,7 +202,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 			xp.mu.Unlock()
 			select {
 			case <-timer:
-				iPrintf("Timeout: XPaxos.Prepare: XPaxos server (%d)\n", xp.id)
+				dPrintf("Timeout: XPaxos.Prepare: XPaxos server (%d)\n", xp.id)
 				return
 			default:
 				time.Sleep(10 * time.Millisecond)

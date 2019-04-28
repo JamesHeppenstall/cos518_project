@@ -172,7 +172,7 @@ func (xp *XPaxos) setVCTimer() {
 
 		xp.mu.Lock()
 		if xp.vcFlag == false && xp.view == oldView {
-			iPrintf("Timeout: XPaxos.setVCTimer: XPaxos server (%d)\n", xp.id)
+			dPrintf("Timeout: XPaxos.setVCTimer: XPaxos server (%d)\n", xp.id)
 			go xp.issueSuspect(xp.view)
 		}
 		xp.mu.Unlock()

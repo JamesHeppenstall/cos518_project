@@ -250,7 +250,7 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 				for i := 0; i < numReplies; i++ {
 					select {
 					case <-timer:
-						iPrintf("Timeout: XPaxos.VCFinal: XPaxos server (%d)\n", xp.id)
+						dPrintf("Timeout: XPaxos.VCFinal: XPaxos server (%d)\n", xp.id)
 						return
 					case <-replyCh:
 					}
