@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// We need to add crytographic digests/signatures to the view change RPCs!
+
 //
 // -------------------------------- SUSPECT RPC -------------------------------
 //
