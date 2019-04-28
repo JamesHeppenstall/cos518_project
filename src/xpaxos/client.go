@@ -48,9 +48,15 @@ func (client *Client) Propose(op interface{}) { // For simplicity, we assume the
 		iPrintf("Timeout: Client.Propose: client server (%d)\n", CLIENT)
 	case <-replyCh:
 		iPrintf("Success: committed request (%d)\n", client.timestamp)
+	case <-client.vcCh:
+		iPrintf("Success: committed request after view change (%d)", client.timestamp)
 	}
 
 	client.timestamp++
+}
+
+func (client *Client) ConfirmVC(msg Message, reply *Reply) {
+	client.vcCh <- true
 }
 
 //
@@ -62,6 +68,7 @@ func MakeClient(replicas []*labrpc.ClientEnd) *Client {
 	client.mu.Lock()
 	client.replicas = replicas
 	client.timestamp = 0
+	client.vcCh = make(chan bool)
 	client.mu.Unlock()
 
 	return client

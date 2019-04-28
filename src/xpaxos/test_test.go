@@ -39,24 +39,49 @@ func TestCommonCase2(t *testing.T) {
 	}
 }
 
-func TestViewChange1(t *testing.T) {
+func TestNetworkPartition1(t *testing.T) {
 	servers := 4
 	cfg := makeConfig(t, servers, false)
 	defer cfg.cleanup()
 
+	// XPaxos server (ID = 2) fails to send RPCs 100% of the time
 	cfg.net.SetFaultRate(2, 100)
 
-	fmt.Println("Test: View Change (t=1)")
+	fmt.Println("Test: Network Partition (t=1)")
 
 	iters := 3
 	for i := 0; i < iters; i++ {
-		fmt.Println(cfg.xpServers[1].view)
-		fmt.Println(cfg.xpServers[2].view)
-		fmt.Println(cfg.xpServers[3].view)
 		cfg.client.Propose(nil)
-		fmt.Println(cfg.xpServers[1].view)
-		fmt.Println(cfg.xpServers[2].view)
-		fmt.Println(cfg.xpServers[3].view)
+		comparePrepareSeqNums(cfg)
+		compareExecuteSeqNums(cfg)
+		comparePrepareLogEntries(cfg)
+		compareCommitLogEntries(cfg)
+	}
+
+	if cfg.xpServers[1].view != 6 || cfg.xpServers[3].view != 6 {
+		cfg.t.Fatal("Invalid current view (should be 6)!")
+	}
+}
+
+func TestNetworkPartition2(t *testing.T) { // THIS TEST IS SOMETIMES FAILING 
+	servers := 5
+	cfg := makeConfig(t, servers, false)
+	defer cfg.cleanup()
+
+	// XPaxos server (ID = 2) fails to send RPCs 100% of the time
+	cfg.net.SetFaultRate(2, 100)
+
+	fmt.Println("Test: Network Partition (t>1)")
+
+	iters := 1
+	for i := 0; i < iters; i++ {
+		for j := 1; j < servers; j++ {
+			fmt.Println(cfg.xpServers[j].view)
+		}
+		cfg.client.Propose(nil)
+		for j := 1; j < servers; j++ {
+			fmt.Println(cfg.xpServers[j].view)
+		}
 		comparePrepareSeqNums(cfg)
 		compareExecuteSeqNums(cfg)
 		comparePrepareLogEntries(cfg)
@@ -138,7 +163,7 @@ func getCurrentView(cfg *config) int {
 	}
 
 	if numCurrent < (len(cfg.xpServers)+1)/2 {
-		cfg.t.Fatal("Invalid current view!")
+		cfg.t.Fatal("Invalid current view (no majority)!")
 	}
 
 	return currentView

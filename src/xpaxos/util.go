@@ -157,3 +157,8 @@ func (xp *XPaxos) compareLogs(prepareLog []PrepareLogEntry, commitLog []CommitLo
 		return true
 	}
 }
+
+func (xp *XPaxos) issueConfirmVC() bool {
+	dPrintf("ConfirmVC: from XPaxos server (%d) to client server (%d)\n", xp.id, CLIENT)
+	return xp.replicas[CLIENT].Call("Client.ConfirmVC", Message{}, &Reply{}, xp.id)
+}

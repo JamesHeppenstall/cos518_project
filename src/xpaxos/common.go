@@ -10,7 +10,7 @@ import (
 
 const DEBUG = 1       // Debugging (0 = None, 1 = Info, 2 = Debug)
 const CLIENT = 0      // Client ID is always set to zero - DO NOT CHANGE
-const TIMEOUT = 10000 // Client timeout period (in milliseconds)
+const TIMEOUT = 10000 // Client timeout period (in milliseconds) - SHOULD ONLY HAPPEN IN ANARCHY
 const BITSIZE = 1024  // RSA private key bit size
 
 const ( // RPC message types for common case and view change protocols
@@ -43,6 +43,7 @@ type Client struct {
 	mu        sync.Mutex
 	replicas  []*labrpc.ClientEnd
 	timestamp int
+	vcCh      chan bool
 	// Must include statistics for evaluation
 }
 
