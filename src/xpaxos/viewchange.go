@@ -61,7 +61,7 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 	if xp.view <= msg.View && ok == false {
 		xp.suspectSet[digest(msg)] = msg
 
-		xp.view = msg.View+1
+		xp.view = msg.View + 1
 		go xp.forwardSuspect(msg)
 
 		xp.generateSynchronousGroup(int64(xp.view))
@@ -174,9 +174,8 @@ func (xp *XPaxos) issueVCFinal(view int) {
 
 func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 	xp.mu.Lock()
-	defer xp.mu.Unlock()
-
 	if xp.view != msg.View {
+		xp.mu.Unlock()
 		return
 	}
 
@@ -229,10 +228,43 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 					}
 				}
 
-				go xp.issueNewView(xp.view)
+				msg := NewViewMessage{
+					MsgType:    NEWVIEW,
+					View:       xp.view,
+					PrepareLog: xp.prepareLog}
+
+				numReplies := len(xp.synchronousGroup) - 1
+				replyCh := make(chan bool, numReplies)
+
+				for server, _ := range xp.synchronousGroup {
+					if server != xp.id {
+						go xp.issueNewView(server, msg, replyCh)
+					}
+				}
+				xp.mu.Unlock()
+
+				timer := time.NewTimer(2 * network.DELTA * time.Millisecond).C
+
+				for i := 0; i < numReplies; i++ {
+					select {
+					case <-timer:
+						iPrintf("Timeout: XPaxos.VCFinal: XPaxos server (%d)\n", xp.id)
+						return
+					case <-replyCh:
+					}
+				}
+
+				xp.mu.Lock()
+				if xp.view != msg.View {
+					xp.mu.Unlock()
+					return
+				}
+
+				go xp.issueNewView(xp.id, msg, replyCh)
 			}
 		}
 	}
+	xp.mu.Unlock()
 }
 
 //
@@ -243,23 +275,20 @@ func (xp *XPaxos) sendNewView(server int, msg NewViewMessage, reply *Reply) bool
 	return xp.replicas[server].Call("XPaxos.NewView", msg, reply, xp.id)
 }
 
-func (xp *XPaxos) issueNewView(view int) {
-	xp.mu.Lock()
-	defer xp.mu.Unlock()
-
-	if xp.view != view {
-		return
-	}
-
-	msg := NewViewMessage{
-		MsgType:    NEWVIEW,
-		View:       xp.view,
-		PrepareLog: xp.prepareLog}
-
+func (xp *XPaxos) issueNewView(server int, msg NewViewMessage, replyCh chan bool) {
 	reply := &Reply{}
 
-	for server, _ := range xp.synchronousGroup {
-		go xp.sendNewView(server, msg, reply)
+	if ok := xp.sendNewView(server, msg, reply); ok {
+		xp.mu.Lock()
+		if xp.view != msg.View {
+			xp.mu.Unlock()
+			return
+		}
+
+		if reply.Success == true {
+			replyCh <- reply.Success
+		}
+		xp.mu.Unlock()
 	}
 }
 
@@ -285,6 +314,8 @@ func (xp *XPaxos) NewView(msg NewViewMessage, reply *Reply) {
 		if xp.id == xp.getLeader() {
 			go xp.issueConfirmVC()
 		}
+
+		reply.Success = true
 	} else {
 		go xp.issueSuspect(xp.view)
 	}
