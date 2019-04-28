@@ -10,24 +10,16 @@ func TestCommonCase1(t *testing.T) {
 	cfg := makeConfig(t, servers, false)
 	defer cfg.cleanup()
 
-	cfg.net.SetFaultRate(2, 100)
-
 	fmt.Println("Test: Common Case (t=1)")
 
-	iters := 1
+	iters := 3
 	for i := 0; i < iters; i++ {
-		fmt.Println(cfg.xpServers[1].view)
-		fmt.Println(cfg.xpServers[2].view)
-		fmt.Println(cfg.xpServers[3].view)
 		cfg.client.Propose(nil)
-		fmt.Println(cfg.xpServers[1].view)
-		fmt.Println(cfg.xpServers[2].view)
-		fmt.Println(cfg.xpServers[3].view)
+		comparePrepareSeqNums(cfg)
+		compareExecuteSeqNums(cfg)
+		comparePrepareLogEntries(cfg)
+		compareCommitLogEntries(cfg)
 	}
-	comparePrepareSeqNums(cfg)
-	compareExecuteSeqNums(cfg)
-	comparePrepareLogEntries(cfg)
-	compareCommitLogEntries(cfg)
 }
 
 func TestCommonCase2(t *testing.T) {
@@ -47,9 +39,34 @@ func TestCommonCase2(t *testing.T) {
 	}
 }
 
+func TestViewChange1(t *testing.T) {
+	servers := 4
+	cfg := makeConfig(t, servers, false)
+	defer cfg.cleanup()
+
+	cfg.net.SetFaultRate(2, 100)
+
+	fmt.Println("Test: View Change (t=1)")
+
+	iters := 3
+	for i := 0; i < iters; i++ {
+		fmt.Println(cfg.xpServers[1].view)
+		fmt.Println(cfg.xpServers[2].view)
+		fmt.Println(cfg.xpServers[3].view)
+		cfg.client.Propose(nil)
+		fmt.Println(cfg.xpServers[1].view)
+		fmt.Println(cfg.xpServers[2].view)
+		fmt.Println(cfg.xpServers[3].view)
+		comparePrepareSeqNums(cfg)
+		compareExecuteSeqNums(cfg)
+		comparePrepareLogEntries(cfg)
+		compareCommitLogEntries(cfg)
+	}
+}
+
 func comparePrepareSeqNums(cfg *config) {
 	currentView := getCurrentView(cfg)
-	
+
 	for i := 1; i < cfg.n; i++ {
 		prepareSeqNum := cfg.xpServers[i].prepareSeqNum
 		if cfg.xpServers[i].view == currentView {
@@ -72,7 +89,7 @@ func compareExecuteSeqNums(cfg *config) {
 				if i != j && cfg.xpServers[i].synchronousGroup[j] == true && cfg.xpServers[j].executeSeqNum != executeSeqNum {
 					cfg.t.Fatal("Invalid execute sequence numbers!")
 				}
-			}	
+			}
 		}
 	}
 }
@@ -88,7 +105,7 @@ func comparePrepareLogEntries(cfg *config) {
 					cfg.t.Fatal("Invalid prepare logs!")
 				}
 			}
-		}	
+		}
 	}
 }
 

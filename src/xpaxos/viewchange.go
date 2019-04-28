@@ -276,9 +276,15 @@ func (xp *XPaxos) NewView(msg NewViewMessage, reply *Reply) {
 
 	if xp.compareLogs(msg.PrepareLog, xp.commitLog) {
 		xp.prepareLog = msg.PrepareLog
-		xp.prepareSeqNum = len(xp.prepareLog) - 1
-		xp.executeSeqNum = len(xp.commitLog) - 1
+		xp.prepareSeqNum = len(xp.prepareLog)
+		xp.executeSeqNum = len(xp.commitLog)
 		xp.vcFlag = true
+
+		xp.suspectSet = make(map[[32]byte]SuspectMessage, 0)
+		xp.vcSet = make(map[[32]byte]ViewChangeMessage, 0)
+		xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
+
+		//if xp.id == xp.getLeader() {}
 	} else {
 		go xp.issueSuspect()
 	}
