@@ -29,6 +29,8 @@ func (client *Client) issueReplicate(server int, request ClientRequest, replyCh 
 }
 
 func (client *Client) Propose(op interface{}) { // For simplicity, we assume the client's proposal is correct
+	var timer <-chan time.Time
+
 	client.mu.Lock()
 	defer client.mu.Unlock()
 
@@ -46,7 +48,9 @@ func (client *Client) Propose(op interface{}) { // For simplicity, we assume the
 		}
 	}
 
-	timer := time.NewTimer(TIMEOUT * time.Millisecond).C
+	if WAIT == false {
+		timer = time.NewTimer(TIMEOUT * time.Millisecond).C
+	}
 
 	select {
 	case <-timer:

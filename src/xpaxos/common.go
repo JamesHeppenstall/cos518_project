@@ -8,10 +8,11 @@ import (
 	"time"
 )
 
-const DEBUG = 1      // Debugging (0 = None, 1 = Info, 2 = Debug)
-const CLIENT = 0     // Client ID is always set to zero - DO NOT CHANGE
-const TIMEOUT = 10000 // Client timeout period (in milliseconds) - SHOULD ONLY HAPPEN IN ANARCHY
-const BITSIZE = 1024 // RSA private key bit size
+const DEBUG = 1       // Debugging (0 = None, 1 = Info, 2 = Debug)
+const CLIENT = 0      // Client ID is always set to zero - DO NOT CHANGE
+const TIMEOUT = 10000 // Client timeout period (in milliseconds)
+const WAIT = true     // If false, client times out after TIMEOUT milliseconds; if true, client never times out
+const BITSIZE = 1024  // RSA private key bit size
 
 const ( // RPC message types for common case and view change protocols
 	REPLICATE  = iota
