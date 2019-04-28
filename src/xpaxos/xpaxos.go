@@ -84,6 +84,11 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 		}
 
 		xp.mu.Lock()
+		if xp.view != msg.View {
+			xp.mu.Unlock()
+			return
+		}
+
 		xp.executeSeqNum++
 		xp.persist()
 		reply.Success = true
@@ -100,28 +105,30 @@ func (xp *XPaxos) sendPrepare(server int, prepareEntry PrepareLogEntry, reply *R
 }
 
 func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh chan bool) {
-	xp.mu.Lock()
-	oldView := xp.view
-	xp.mu.Unlock()
-
 	reply := &Reply{}
 
 	if ok := xp.sendPrepare(server, prepareEntry, reply); ok {
 		xp.mu.Lock()
-		verification := xp.verify(server, reply.MsgDigest, reply.Signature)
-		xp.mu.Unlock()
+		if xp.view != prepareEntry.Msg0.View {
+			xp.mu.Unlock()
+			return
+		}
 
+		verification := xp.verify(server, reply.MsgDigest, reply.Signature)
+		
 		if bytes.Compare(prepareEntry.Msg0.MsgDigest[:], reply.MsgDigest[:]) == 0 && verification == true {
 			if reply.Success == true {
 				replyCh <- reply.Success
 			} else if reply.Suspicious == true {
+				xp.mu.Unlock()
 				return
 			}
 		} else { // Verification of crypto signature in reply fails
-			go xp.issueSuspect(oldView)
+			go xp.issueSuspect(xp.view)
 		}
+		xp.mu.Unlock()
 	} else { // RPC times out after time frame delta (see network)
-		go xp.issueSuspect(oldView)
+		go xp.issueSuspect(prepareEntry.Msg0.View)
 	}
 }
 
@@ -203,6 +210,11 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 			xp.mu.Lock()
 		}
 
+		if xp.view != msg.View {
+			xp.mu.Unlock()
+			return
+		}
+
 		xp.executeSeqNum++
 		xp.persist()
 		reply.Success = true
@@ -222,16 +234,16 @@ func (xp *XPaxos) sendCommit(server int, msg Message, reply *Reply) bool {
 }
 
 func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
-	xp.mu.Lock()
-	oldView := xp.view
-	xp.mu.Unlock()
-
 	reply := &Reply{}
 
 	if ok := xp.sendCommit(server, msg, reply); ok {
 		xp.mu.Lock()
+		if xp.view != msg.View {
+			xp.mu.Unlock()
+			return
+		}
+
 		verification := xp.verify(server, reply.MsgDigest, reply.Signature)
-		xp.mu.Unlock()
 
 		if bytes.Compare(msg.MsgDigest[:], reply.MsgDigest[:]) == 0 && verification == true {
 			if reply.Success == true {
@@ -242,10 +254,11 @@ func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
 				go xp.issueCommit(server, msg, replyCh) // Retransmit if commit RPC fails - DO NOT CHANGE
 			}
 		} else { // Verification of crypto signature in reply fails
-			go xp.issueSuspect(oldView)
+			go xp.issueSuspect(xp.view)
 		}
+		xp.mu.Unlock()
 	} else { // RPC times out after time frame delta (see network)
-		go xp.issueSuspect(oldView)
+		go xp.issueSuspect(msg.View)
 	}
 }
 
