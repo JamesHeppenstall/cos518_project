@@ -17,9 +17,13 @@ func (xp *XPaxos) issueSuspect(view int) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
 
+	if xp.view != view {
+		return
+	}
+
 	msg := SuspectMessage{
 		MsgType:  SUSPECT,
-		View:     view,
+		View:     xp.view,
 		SenderId: xp.id}
 
 	reply := &Reply{}
@@ -34,6 +38,10 @@ func (xp *XPaxos) issueSuspect(view int) {
 func (xp *XPaxos) forwardSuspect(msg SuspectMessage) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
+
+	if xp.view != msg.View+1 {
+		return
+	}
 
 	reply := &Reply{}
 
@@ -53,19 +61,14 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 	if xp.view <= msg.View && ok == false {
 		xp.suspectSet[digest(msg)] = msg
 
+		xp.view = msg.View+1
 		go xp.forwardSuspect(msg)
-
-		if xp.view == msg.View {
-			xp.view++
-		} else {
-			xp.view = msg.View
-		}
 
 		xp.generateSynchronousGroup(int64(xp.view))
 		xp.vcSet = make(map[[32]byte]ViewChangeMessage, 0)
 		xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
 
-		go xp.issueViewChange()
+		go xp.issueViewChange(xp.view)
 
 		if len(xp.synchronousGroup) > 0 {
 			xp.netFlag = false
@@ -82,9 +85,13 @@ func (xp *XPaxos) sendViewChange(server int, msg ViewChangeMessage, reply *Reply
 	return xp.replicas[server].Call("XPaxos.ViewChange", msg, reply, xp.id)
 }
 
-func (xp *XPaxos) issueViewChange() {
+func (xp *XPaxos) issueViewChange(view int) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
+
+	if xp.view != view {
+		return
+	}
 
 	msg := ViewChangeMessage{
 		MsgType:   VIEWCHANGE,
@@ -101,12 +108,12 @@ func (xp *XPaxos) issueViewChange() {
 
 func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 	xp.mu.Lock()
-	if xp.view <= msg.View {
+	if xp.view == msg.View {
 		xp.vcSet[digest(msg)] = msg
 
 		if len(xp.vcSet) == len(xp.replicas)-1 {
 			xp.setVCTimer()
-			go xp.issueVCFinal()
+			go xp.issueVCFinal(xp.view)
 			return
 		}
 		xp.mu.Unlock()
@@ -114,9 +121,14 @@ func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 		<-xp.netTimer
 
 		xp.mu.Lock()
+		if xp.view != msg.View {
+			xp.mu.Unlock()
+			return
+		}
+
 		if xp.netFlag == false && len(xp.vcSet) >= (len(xp.replicas)+1)/2 {
 			xp.setVCTimer()
-			go xp.issueVCFinal()
+			go xp.issueVCFinal(xp.view)
 		} else if xp.netFlag == false {
 			xp.vcFlag = true
 			go xp.issueSuspect(xp.view)
@@ -126,16 +138,20 @@ func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 }
 
 //
-// -------------------------------- VC-FINAL RPC ------------------------------
+// ------------------------------- VC-FINAL RPC -------------------------------
 //
 func (xp *XPaxos) sendVCFinal(server int, msg VCFinalMessage, reply *Reply) bool {
 	dPrintf("VCFinal: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.VCFinal", msg, reply, xp.id)
 }
 
-func (xp *XPaxos) issueVCFinal() {
+func (xp *XPaxos) issueVCFinal(view int) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
+
+	if xp.view != view {
+		return
+	}
 
 	vcSetCopy := make(map[[32]byte]ViewChangeMessage)
 
@@ -159,6 +175,10 @@ func (xp *XPaxos) issueVCFinal() {
 func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
+
+	if xp.view != msg.View {
+		return
+	}
 
 	if xp.synchronousGroup[msg.SenderId] == true {
 		xp.receivedVCFinal[msg.SenderId] = msg.VCSet
@@ -209,7 +229,7 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 					}
 				}
 
-				go xp.issueNewView()
+				go xp.issueNewView(xp.view)
 			}
 		}
 	}
@@ -223,9 +243,13 @@ func (xp *XPaxos) sendNewView(server int, msg NewViewMessage, reply *Reply) bool
 	return xp.replicas[server].Call("XPaxos.NewView", msg, reply, xp.id)
 }
 
-func (xp *XPaxos) issueNewView() {
+func (xp *XPaxos) issueNewView(view int) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
+
+	if xp.view != view {
+		return
+	}
 
 	msg := NewViewMessage{
 		MsgType:    NEWVIEW,
@@ -242,6 +266,10 @@ func (xp *XPaxos) issueNewView() {
 func (xp *XPaxos) NewView(msg NewViewMessage, reply *Reply) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
+
+	if xp.view != msg.View {
+		return
+	}
 
 	xp.vcFlag = true
 
