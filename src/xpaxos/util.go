@@ -161,20 +161,22 @@ func (xp *XPaxos) compareLogs(prepareLog []PrepareLogEntry, commitLog []CommitLo
 }
 
 func (xp *XPaxos) setVCTimer() {
+	oldView := xp.view
+
 	xp.netFlag = true
 	xp.vcFlag = false
 	xp.vcTimer = time.NewTimer(3 * network.DELTA * time.Millisecond).C
 
-	go func(xp *XPaxos) {
+	go func(xp *XPaxos, oldView int) {
 		<-xp.vcTimer
 
 		xp.mu.Lock()
-		if xp.vcFlag == false {
+		if xp.vcFlag == false && xp.view == oldView {
 			iPrintf("Timeout: XPaxos.setVCTimer: XPaxos server (%d)\n", xp.id)
 			go xp.issueSuspect()
 		}
 		xp.mu.Unlock()
-	}(xp)
+	}(xp, oldView)
 }
 
 func (xp *XPaxos) issueConfirmVC() bool {

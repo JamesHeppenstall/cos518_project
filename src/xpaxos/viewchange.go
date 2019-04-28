@@ -9,7 +9,7 @@ import (
 // -------------------------------- SUSPECT RPC -------------------------------
 //
 func (xp *XPaxos) sendSuspect(server int, msg SuspectMessage, reply *Reply) bool {
-	dPrintf("Suspect: from XPaxos server (%d) to XPaxos server (%d) %d\n", xp.id, server, xp.view)
+	dPrintf("Suspect: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.Suspect", msg, reply, xp.id)
 }
 
