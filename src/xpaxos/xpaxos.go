@@ -3,7 +3,7 @@ package xpaxos
 import (
 	"bytes"
 	"crypto/rsa"
-	"labrpc"
+	"network"
 	"time"
 )
 
@@ -56,7 +56,7 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 		xp.persist()
 		xp.mu.Unlock()
 
-		timer := time.NewTimer(3 * labrpc.DELTA * time.Millisecond).C
+		timer := time.NewTimer(3 * network.DELTA * time.Millisecond).C
 
 		for i := 0; i < numReplies; i++ {
 			select {
@@ -100,7 +100,7 @@ func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh
 		} else { // Verification of crypto signature in reply fails
 			go xp.issueSuspect()
 		}
-	} else { // RPC times out after time frame delta (see labrpc)
+	} else { // RPC times out after time frame delta (see network)
 		go xp.issueSuspect()
 	}
 }
@@ -157,7 +157,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 		xp.persist()
 		xp.mu.Unlock()
 
-		timer := time.NewTimer(2 * labrpc.DELTA * time.Millisecond).C
+		timer := time.NewTimer(2 * network.DELTA * time.Millisecond).C
 
 		for i := 0; i < numReplies; i++ {
 			select {
@@ -168,7 +168,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 			}
 		}
 
-		timer = time.NewTimer(2 * labrpc.DELTA * time.Millisecond).C
+		timer = time.NewTimer(2 * network.DELTA * time.Millisecond).C
 
 		// Busy wait until XPaxos server receives commit messages from entire synchronous group
 		xp.mu.Lock()
@@ -221,7 +221,7 @@ func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
 		} else { // Verification of crypto signature in reply fails
 			go xp.issueSuspect()
 		}
-	} else { // RPC times out after time frame delta (see labrpc)
+	} else { // RPC times out after time frame delta (see network)
 		go xp.issueSuspect()
 	}
 }
@@ -257,7 +257,7 @@ func (xp *XPaxos) Commit(msg Message, reply *Reply) {
 //
 // ------------------------------- MAKE FUNCTION ------------------------------
 //
-func Make(replicas []*labrpc.ClientEnd, id int, persister *Persister, privateKey *rsa.PrivateKey,
+func Make(replicas []*network.ClientEnd, id int, persister *Persister, privateKey *rsa.PrivateKey,
 	publicKeys map[int]*rsa.PublicKey) *XPaxos {
 	xp := &XPaxos{}
 

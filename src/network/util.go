@@ -1,4 +1,4 @@
-package labrpc
+package network
 
 import "log"
 

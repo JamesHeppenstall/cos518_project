@@ -1,4 +1,4 @@
-package labrpc
+package network
 
 //
 // channel-based RPC, for 824 labs.
@@ -65,7 +65,7 @@ type reqMsg struct {
 	argsType reflect.Type
 	args     []byte
 	replyCh  chan replyMsg
-	callerId	 int
+	callerId int
 }
 
 type replyMsg struct {
@@ -119,7 +119,7 @@ type Network struct {
 	servers        map[interface{}]*Server     // servers, by name
 	connections    map[interface{}]interface{} // endname -> servername
 	endCh          chan reqMsg
-	faultRate	   map[interface{}]int
+	faultRate      map[interface{}]int
 }
 
 func MakeNetwork() *Network {
@@ -210,7 +210,7 @@ func (rn *Network) ProcessReq(req reqMsg) {
 		}
 
 		// failure when sending to destination
-		if (rand.Int()%100) < rn.faultRate[servername] {
+		if (rand.Int() % 100) < rn.faultRate[servername] {
 			// drop the request, return as if timeout
 			dPrintf("Network: couldn't connect XPaxos server (%d) to XPaxos server (%d)\n", req.callerId, servername)
 			time.Sleep(time.Duration(DELTA) * time.Millisecond)
@@ -238,7 +238,7 @@ func (rn *Network) ProcessReq(req reqMsg) {
 			select {
 			case reply = <-ech:
 				// failure when sending response to source
-				if (rand.Int()%100) < rn.faultRate[req.callerId]  {
+				if (rand.Int() % 100) < rn.faultRate[req.callerId] {
 					// drop the request, return as if timeout
 					dPrintf("Network: couldn't connect XPaxos server (%d) to XPaxos server (%d)\n", servername, req.callerId)
 					time.Sleep(time.Duration(DELTA) * time.Millisecond)

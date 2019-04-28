@@ -63,7 +63,7 @@ func TestNetworkPartition1(t *testing.T) {
 	}
 }
 
-func TestNetworkPartition2(t *testing.T) { // THIS TEST IS SOMETIMES FAILING 
+func TestNetworkPartition2(t *testing.T) { // THIS TEST IS SOMETIMES FAILING
 	servers := 5
 	cfg := makeConfig(t, servers, false)
 	defer cfg.cleanup()

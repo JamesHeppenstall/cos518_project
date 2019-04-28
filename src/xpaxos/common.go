@@ -2,7 +2,7 @@ package xpaxos
 
 import (
 	"crypto/rsa"
-	"labrpc"
+	"network"
 	"sync"
 	"testing"
 	"time"
@@ -27,7 +27,7 @@ const ( // RPC message types for common case and view change protocols
 type config struct {
 	mu          sync.Mutex
 	t           *testing.T
-	net         *labrpc.Network
+	net         *network.Network
 	n           int   // Total number of client and XPaxos servers
 	done        int32 // Tell internal threads to die
 	xpServers   []*XPaxos
@@ -41,7 +41,7 @@ type config struct {
 
 type Client struct {
 	mu        sync.Mutex
-	replicas  []*labrpc.ClientEnd
+	replicas  []*network.ClientEnd
 	timestamp int
 	vcCh      chan bool
 	// Must include statistics for evaluation
@@ -50,7 +50,7 @@ type Client struct {
 type XPaxos struct {
 	mu               sync.Mutex
 	persister        *Persister
-	replicas         []*labrpc.ClientEnd
+	replicas         []*network.ClientEnd
 	synchronousGroup map[int]bool
 	id               int
 	view             int

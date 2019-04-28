@@ -1,7 +1,7 @@
 package xpaxos
 
 import (
-	"labrpc"
+	"network"
 	"time"
 )
 
@@ -73,7 +73,7 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 
 		if len(xp.synchronousGroup) > 0 {
 			xp.netFlag = false
-			xp.netTimer = time.NewTimer(2 * labrpc.DELTA * time.Millisecond).C
+			xp.netTimer = time.NewTimer(2 * network.DELTA * time.Millisecond).C
 		}
 	}
 	xp.mu.Unlock()
@@ -115,7 +115,7 @@ func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 		if len(xp.vcSet) == len(xp.replicas)-1 {
 			xp.netFlag = true
 			xp.vcFlag = false
-			xp.vcTimer = time.NewTimer(3 * labrpc.DELTA * time.Millisecond).C
+			xp.vcTimer = time.NewTimer(3 * network.DELTA * time.Millisecond).C
 
 			go xp.issueVCFinal()
 			go func(xp *XPaxos) {
@@ -138,7 +138,7 @@ func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 		if xp.netFlag == false && len(xp.vcSet) >= (len(xp.replicas)+1)/2 {
 			xp.netFlag = true
 			xp.vcFlag = false
-			xp.vcTimer = time.NewTimer(3 * labrpc.DELTA * time.Millisecond).C
+			xp.vcTimer = time.NewTimer(3 * network.DELTA * time.Millisecond).C
 
 			go xp.issueVCFinal()
 

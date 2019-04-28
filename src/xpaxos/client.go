@@ -1,7 +1,7 @@
 package xpaxos
 
 import (
-	"labrpc"
+	"network"
 	"time"
 )
 
@@ -62,7 +62,7 @@ func (client *Client) ConfirmVC(msg Message, reply *Reply) {
 //
 // ------------------------------- MAKE FUNCTION ------------------------------
 //
-func MakeClient(replicas []*labrpc.ClientEnd) *Client {
+func MakeClient(replicas []*network.ClientEnd) *Client {
 	client := &Client{}
 
 	client.mu.Lock()

@@ -4,7 +4,7 @@ import (
 	crand "crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
-	"labrpc"
+	"network"
 	"runtime"
 	"sync/atomic"
 	"testing"
@@ -21,7 +21,7 @@ func makeConfig(t *testing.T, n int, unreliable bool) *config {
 	runtime.GOMAXPROCS(4)
 	cfg := &config{}
 	cfg.t = t
-	cfg.net = labrpc.MakeNetwork()
+	cfg.net = network.MakeNetwork()
 	cfg.n = n
 	cfg.xpServers = make([]*XPaxos, cfg.n)
 	cfg.client = &Client{}
@@ -103,7 +103,7 @@ func (cfg *config) start1(i int) {
 	}
 
 	// A fresh set of ClientEnds
-	ends := make([]*labrpc.ClientEnd, cfg.n)
+	ends := make([]*network.ClientEnd, cfg.n)
 	for j := 0; j < cfg.n; j++ {
 		ends[j] = cfg.net.MakeEnd(cfg.endnames[i][j])
 		cfg.net.Connect(cfg.endnames[i][j], j)
@@ -132,8 +132,8 @@ func (cfg *config) start1(i int) {
 	cfg.xpServers[i] = xp
 	cfg.mu.Unlock()
 
-	svc := labrpc.MakeService(xp)
-	srv := labrpc.MakeServer()
+	svc := network.MakeService(xp)
+	srv := network.MakeServer()
 	srv.AddService(svc)
 	cfg.net.AddServer(i, srv)
 }
@@ -168,7 +168,7 @@ func (cfg *config) startClient() {
 	}
 
 	// A fresh set of ClientEnds
-	ends := make([]*labrpc.ClientEnd, cfg.n)
+	ends := make([]*network.ClientEnd, cfg.n)
 	for j := 0; j < cfg.n; j++ {
 		ends[j] = cfg.net.MakeEnd(cfg.endnames[CLIENT][j])
 		cfg.net.Connect(cfg.endnames[CLIENT][j], j)
@@ -185,8 +185,8 @@ func (cfg *config) startClient() {
 	cfg.client = client
 	cfg.mu.Unlock()
 
-	svc := labrpc.MakeService(cfg.client)
-	srv := labrpc.MakeServer()
+	svc := network.MakeService(cfg.client)
+	srv := network.MakeServer()
 	srv.AddService(svc)
 	cfg.net.AddServer(CLIENT, srv)
 }
