@@ -56,7 +56,7 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 		xp.persist()
 		xp.mu.Unlock()
 
-		timer := time.NewTimer(TIMEOUT * time.Millisecond).C
+		timer := time.NewTimer(3 * labrpc.DELTA * time.Millisecond).C
 
 		for i := 0; i < numReplies; i++ {
 			select {
@@ -157,7 +157,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 		xp.persist()
 		xp.mu.Unlock()
 
-		timer := time.NewTimer(TIMEOUT * time.Millisecond).C
+		timer := time.NewTimer(2 * labrpc.DELTA * time.Millisecond).C
 
 		for i := 0; i < numReplies; i++ {
 			select {
@@ -168,7 +168,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 			}
 		}
 
-		timer = time.NewTimer(TIMEOUT * time.Millisecond).C
+		timer = time.NewTimer(2 * labrpc.DELTA * time.Millisecond).C
 
 		// Busy wait until XPaxos server receives commit messages from entire synchronous group
 		xp.mu.Lock()
