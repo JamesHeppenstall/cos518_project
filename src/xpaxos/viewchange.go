@@ -74,7 +74,7 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 
 		if len(xp.synchronousGroup) > 0 {
 			xp.netFlag = false
-			xp.netTimer = time.NewTimer(2 * network.DELTA * time.Millisecond).C
+			xp.netTimer = time.NewTimer(3 * network.DELTA * time.Millisecond).C
 		}
 	}
 }
@@ -245,7 +245,7 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 				}
 				xp.mu.Unlock()
 
-				timer := time.NewTimer(2 * network.DELTA * time.Millisecond).C
+				timer := time.NewTimer(3 * network.DELTA * time.Millisecond).C
 
 				for i := 0; i < numReplies; i++ {
 					select {
