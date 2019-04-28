@@ -13,13 +13,13 @@ func (xp *XPaxos) sendSuspect(server int, msg SuspectMessage, reply *Reply) bool
 	return xp.replicas[server].Call("XPaxos.Suspect", msg, reply, xp.id)
 }
 
-func (xp *XPaxos) issueSuspect() {
+func (xp *XPaxos) issueSuspect(view int) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
 
 	msg := SuspectMessage{
 		MsgType:  SUSPECT,
-		View:     xp.view,
+		View:     view,
 		SenderId: xp.id}
 
 	reply := &Reply{}
@@ -119,7 +119,7 @@ func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 			go xp.issueVCFinal()
 		} else if xp.netFlag == false {
 			xp.vcFlag = true
-			go xp.issueSuspect()
+			go xp.issueSuspect(xp.view)
 		}
 	}
 	xp.mu.Unlock()
@@ -258,6 +258,6 @@ func (xp *XPaxos) NewView(msg NewViewMessage, reply *Reply) {
 			go xp.issueConfirmVC()
 		}
 	} else {
-		go xp.issueSuspect()
+		go xp.issueSuspect(xp.view)
 	}
 }

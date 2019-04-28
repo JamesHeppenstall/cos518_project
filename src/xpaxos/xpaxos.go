@@ -100,6 +100,10 @@ func (xp *XPaxos) sendPrepare(server int, prepareEntry PrepareLogEntry, reply *R
 }
 
 func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh chan bool) {
+	xp.mu.Lock()
+	oldView := xp.view
+	xp.mu.Unlock()
+
 	reply := &Reply{}
 
 	if ok := xp.sendPrepare(server, prepareEntry, reply); ok {
@@ -114,10 +118,10 @@ func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh
 				return
 			}
 		} else { // Verification of crypto signature in reply fails
-			go xp.issueSuspect()
+			go xp.issueSuspect(oldView)
 		}
 	} else { // RPC times out after time frame delta (see network)
-		go xp.issueSuspect()
+		go xp.issueSuspect(oldView)
 	}
 }
 
@@ -204,7 +208,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 		reply.Success = true
 	} else { // Verification of crypto signature in prepareEntry fails
 		reply.Suspicious = true
-		go xp.issueSuspect()
+		go xp.issueSuspect(xp.view)
 	}
 	xp.mu.Unlock()
 }
@@ -218,6 +222,10 @@ func (xp *XPaxos) sendCommit(server int, msg Message, reply *Reply) bool {
 }
 
 func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
+	xp.mu.Lock()
+	oldView := xp.view
+	xp.mu.Unlock()
+
 	reply := &Reply{}
 
 	if ok := xp.sendCommit(server, msg, reply); ok {
@@ -234,10 +242,10 @@ func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
 				go xp.issueCommit(server, msg, replyCh) // Retransmit if commit RPC fails - DO NOT CHANGE
 			}
 		} else { // Verification of crypto signature in reply fails
-			go xp.issueSuspect()
+			go xp.issueSuspect(oldView)
 		}
 	} else { // RPC times out after time frame delta (see network)
-		go xp.issueSuspect()
+		go xp.issueSuspect(oldView)
 	}
 }
 
@@ -265,7 +273,7 @@ func (xp *XPaxos) Commit(msg Message, reply *Reply) {
 		}
 	} else { // Verification of crypto signature in msg fails
 		reply.Suspicious = true
-		go xp.issueSuspect()
+		go xp.issueSuspect(xp.view)
 	}
 }
 
