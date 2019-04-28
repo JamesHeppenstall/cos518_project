@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"log"
 	"math/rand"
+	"network"
+	"time"
 )
 
 //
@@ -156,6 +158,23 @@ func (xp *XPaxos) compareLogs(prepareLog []PrepareLogEntry, commitLog []CommitLo
 		}
 		return true
 	}
+}
+
+func (xp *XPaxos) setVCTimer() {
+	xp.netFlag = true
+	xp.vcFlag = false
+	xp.vcTimer = time.NewTimer(3 * network.DELTA * time.Millisecond).C
+
+	go func(xp *XPaxos) {
+		<-xp.vcTimer
+
+		xp.mu.Lock()
+		if xp.vcFlag == false {
+			iPrintf("Timeout: XPaxos.setVCTimer: XPaxos server (%d)\n", xp.id)
+			go xp.issueSuspect()
+		}
+		xp.mu.Unlock()
+	}(xp)
 }
 
 func (xp *XPaxos) issueConfirmVC() bool {
