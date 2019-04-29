@@ -3,6 +3,7 @@ package xpaxos
 import (
 	"fmt"
 	"testing"
+	"math/rand"
 )
 
 // => Try to set number of servers in each test to an even number (i.e. one client server
@@ -42,6 +43,27 @@ func TestCommonCase2(t *testing.T) {
 		comparePrepareLogEntries(cfg)
 		compareCommitLogEntries(cfg)
 	}
+}
+
+func TestCommonCase3(t *testing.T) {
+	servers := 4
+	cfg := makeConfig(t, servers, false)
+	defer cfg.cleanup()
+
+	fmt.Println("Test: Common Case (t=1)")
+
+	op := make([]byte, 1024)
+	rand.Read(op) // Operation is a 1 kB random byte array
+
+	iters := 1000
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(op)
+	}
+
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
 }
 
 func TestFullNetworkPartition1(t *testing.T) {
