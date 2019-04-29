@@ -101,10 +101,14 @@ func (xp *XPaxos) issueViewChange(view int) {
 		SenderId:  xp.id,
 		CommitLog: xp.commitLog}
 
-	reply := &Reply{}
-
 	for server, _ := range xp.synchronousGroup {
-		go xp.sendViewChange(server, msg, reply)
+		go func(xp *XPaxos, server int, msg ViewChangeMessage) {
+			reply := &Reply{}
+
+			if ok := xp.sendViewChange(server, msg, reply); !ok {
+				go xp.issueSuspect(msg.View)
+			}
+		}(xp, server, msg)
 	}
 }
 
@@ -167,10 +171,14 @@ func (xp *XPaxos) issueVCFinal(view int) {
 		SenderId: xp.id,
 		VCSet:    vcSetCopy}
 
-	reply := &Reply{}
-
 	for server, _ := range xp.synchronousGroup {
-		go xp.sendVCFinal(server, msg, reply)
+		go func(xp *XPaxos, server int, msg VCFinalMessage) {
+			reply := &Reply{}
+
+			if ok := xp.sendVCFinal(server, msg, reply); !ok {
+				go xp.issueSuspect(msg.View)
+			}
+		}(xp, server, msg)
 	}
 }
 
@@ -179,6 +187,14 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 	if xp.view != msg.View {
 		xp.mu.Unlock()
 		return
+	}
+
+	for senderId, vcSet := range xp.receivedVCFinal { // This could/*should* be made more efficient
+		for _, msg := range vcSet {
+			if xp.view != msg.View {
+				delete(xp.receivedVCFinal, senderId)
+			}
+		}
 	}
 
 	if xp.synchronousGroup[msg.SenderId] == true {
@@ -291,6 +307,8 @@ func (xp *XPaxos) issueNewView(server int, msg NewViewMessage, replyCh chan bool
 			replyCh <- reply.Success
 		}
 		xp.mu.Unlock()
+	} else {
+		go xp.issueSuspect(msg.View)
 	}
 }
 
