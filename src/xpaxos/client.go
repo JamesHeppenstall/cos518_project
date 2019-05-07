@@ -32,8 +32,6 @@ func (client *Client) Propose(op interface{}) { // For simplicity, we assume the
 	var timer <-chan time.Time
 
 	client.mu.Lock()
-	defer client.mu.Unlock()
-
 	request := ClientRequest{
 		MsgType:   REPLICATE,
 		Timestamp: client.timestamp,
@@ -51,6 +49,7 @@ func (client *Client) Propose(op interface{}) { // For simplicity, we assume the
 	if WAIT == false {
 		timer = time.NewTimer(TIMEOUT * time.Millisecond).C
 	}
+	client.mu.Unlock()
 
 	select {
 	case <-timer:
@@ -61,7 +60,9 @@ func (client *Client) Propose(op interface{}) { // For simplicity, we assume the
 		iPrintf("Success: committed request after view change (%d)", client.timestamp)
 	}
 
+	client.mu.Lock()
 	client.timestamp++
+	client.mu.Unlock()
 }
 
 func (client *Client) ConfirmVC(msg Message, reply *Reply) {
