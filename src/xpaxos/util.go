@@ -6,7 +6,6 @@ import (
 	crand "crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"encoding/gob"
 	"encoding/json"
 	"log"
 	"math/rand"
@@ -36,23 +35,6 @@ func checkError(err error) {
 		log.Fatal(err)
 	}
 	return
-}
-
-//
-// ----------------------------- PERSISTER FUNCTIONS --------------------------
-//
-func (xp *XPaxos) persist() { // TODO
-	buf := new(bytes.Buffer)
-	enc := gob.NewEncoder(buf)
-	enc.Encode(0)
-	data := buf.Bytes()
-	xp.persister.SaveXPaxosState(data)
-}
-
-func (xp *XPaxos) readPersist(data []byte) { // TODO
-	buf := bytes.NewBuffer(data)
-	dec := gob.NewDecoder(buf)
-	dec.Decode(0)
 }
 
 //

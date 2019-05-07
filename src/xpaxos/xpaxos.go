@@ -14,7 +14,7 @@ package xpaxos
 // We simulate a network in the eponymous package - in particular, this allows gives us
 // fine-grained control over the time frame delta (defined in network/common.go - line 9)
 //
-// xp := Make(replicas, id, persister, privateKey, publicKeys) - Creates an XPaxos server
+// xp := Make(replicas, id, privateKey, publicKeys) - Creates an XPaxos server
 // => Option to perform cleanup with xp.Kill()
 
 import (
@@ -69,7 +69,6 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 			}
 		}
 
-		xp.persist()
 		xp.mu.Unlock()
 
 		timer := time.NewTimer(3 * network.DELTA * time.Millisecond).C
@@ -90,7 +89,6 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 		}
 
 		xp.executeSeqNum++
-		xp.persist()
 		reply.Success = true
 	}
 	xp.mu.Unlock()
@@ -179,8 +177,6 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 				go xp.issueCommit(server, msg, replyCh)
 			}
 		}
-
-		xp.persist()
 		xp.mu.Unlock()
 
 		timer := time.NewTimer(3 * network.DELTA * time.Millisecond).C
@@ -216,7 +212,6 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 		}
 
 		xp.executeSeqNum++
-		xp.persist()
 		reply.Success = true
 	} else { // Verification of crypto signature in prepareEntry fails
 		reply.Suspicious = true
@@ -281,7 +276,6 @@ func (xp *XPaxos) Commit(msg Message, reply *Reply) {
 		if xp.executeSeqNum < len(xp.commitLog) {
 			senderId := msg.SenderId
 			xp.commitLog[xp.executeSeqNum].Msg1[senderId] = msg
-			xp.persist()
 			reply.Success = true
 		}
 	} else { // Verification of crypto signature in msg fails
@@ -293,12 +287,11 @@ func (xp *XPaxos) Commit(msg Message, reply *Reply) {
 //
 // ------------------------------- MAKE FUNCTION ------------------------------
 //
-func Make(replicas []*network.ClientEnd, id int, persister *Persister, privateKey *rsa.PrivateKey,
+func Make(replicas []*network.ClientEnd, id int, privateKey *rsa.PrivateKey,
 	publicKeys map[int]*rsa.PublicKey) *XPaxos {
 	xp := &XPaxos{}
 
 	xp.mu.Lock()
-	xp.persister = persister
 	xp.replicas = replicas
 	xp.synchronousGroup = make(map[int]bool, 0)
 	xp.id = id
@@ -318,7 +311,6 @@ func Make(replicas []*network.ClientEnd, id int, persister *Persister, privateKe
 	xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
 
 	xp.generateSynchronousGroup(int64(xp.view))
-	xp.readPersist(persister.ReadXPaxosState())
 	xp.mu.Unlock()
 
 	return xp

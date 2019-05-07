@@ -201,8 +201,7 @@ func (rn *Network) ProcessReq(req reqMsg) {
 		}
 
 		// Do not reply if DeleteServer() has been called to avoid situation in which a client gets a
-		// positive reply but the server persisted the update into the old Persister (config.go is careful
-		// to call DeleteServer() before superseding the Persister)
+		// positive reply but the server persisted the update
 		serverDead = rn.IsServerDead(req.endname, servername, server)
 
 		if replyOK == false || serverDead == true {

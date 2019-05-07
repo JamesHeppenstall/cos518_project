@@ -34,7 +34,6 @@ type config struct {
 	xpServers   []*XPaxos
 	client      *Client
 	connected   []bool // Whether each server is on the net
-	saved       []*Persister
 	endnames    [][]string // The port file names each sends to
 	privateKeys map[int]*rsa.PrivateKey
 	publicKeys  map[int]*rsa.PublicKey
@@ -50,7 +49,6 @@ type Client struct {
 
 type XPaxos struct {
 	mu               sync.Mutex
-	persister        *Persister
 	replicas         []*network.ClientEnd
 	synchronousGroup map[int]bool
 	id               int

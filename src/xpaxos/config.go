@@ -26,13 +26,11 @@ func makeConfig(t *testing.T, n int, unreliable bool) *config {
 	cfg.xpServers = make([]*XPaxos, cfg.n)
 	cfg.client = &Client{}
 	cfg.connected = make([]bool, cfg.n)
-	cfg.saved = make([]*Persister, cfg.n)
 	cfg.endnames = make([][]string, cfg.n)
 	cfg.privateKeys = make(map[int]*rsa.PrivateKey, cfg.n)
 	cfg.publicKeys = make(map[int]*rsa.PublicKey, cfg.n)
 
 	cfg.setUnreliable(unreliable)
-
 	cfg.net.LongDelays(false)
 
 	cfg.startClient() // Create client server
@@ -48,7 +46,7 @@ func makeConfig(t *testing.T, n int, unreliable bool) *config {
 	return cfg
 }
 
-// Shut down an XPaxos server but save its persistent state
+// Shut down an XPaxos server
 func (cfg *config) crash1(i int) {
 	if i == CLIENT {
 		dPrintf("Cannot call crash1() on client server; must call crashClient()")
@@ -61,12 +59,6 @@ func (cfg *config) crash1(i int) {
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
 
-	// A fresh persister, in case the old instance continues to update the Persister
-	// Copy old persister's content so that we always pass Make() the last persisted state
-	if cfg.saved[i] != nil {
-		cfg.saved[i] = cfg.saved[i].Copy()
-	}
-
 	xp := cfg.xpServers[i]
 	if xp != nil {
 		cfg.mu.Unlock()
@@ -74,17 +66,11 @@ func (cfg *config) crash1(i int) {
 		cfg.mu.Lock()
 		cfg.xpServers[i] = nil
 	}
-
-	if cfg.saved[i] != nil {
-		xpLog := cfg.saved[i].ReadXPaxosState()
-		cfg.saved[i] = &Persister{}
-		cfg.saved[i].SaveXPaxosState(xpLog)
-	}
 }
 
 // Start or re-start an XPaxos server; if one already exists, "kill" it first
-// Allocate new outgoing port file names, and a new state persister, to isolate previous instance of
-// this server since we cannot really kill it
+// Allocate new outgoing port file names to isolate previous instance of this server since we 
+// cannot really kill it
 func (cfg *config) start1(i int) {
 	if i == CLIENT {
 		dPrintf("Cannot call start1() on client server; must call startClient()")
@@ -111,19 +97,7 @@ func (cfg *config) start1(i int) {
 	cfg.privateKeys[i] = privateKey
 	cfg.publicKeys[i] = publicKey
 
-	cfg.mu.Lock()
-
-	// A fresh persister, so old instance doesn't overwrite new instance's persisted state
-	// Copy old persister's content so that we always pass Make() the last persisted state
-	if cfg.saved[i] != nil {
-		cfg.saved[i] = cfg.saved[i].Copy()
-	} else {
-		cfg.saved[i] = MakePersister()
-	}
-
-	cfg.mu.Unlock()
-
-	xp := Make(ends, i, cfg.saved[i], cfg.privateKeys[i], cfg.publicKeys)
+	xp := Make(ends, i, cfg.privateKeys[i], cfg.publicKeys)
 
 	cfg.mu.Lock()
 	cfg.xpServers[i] = xp
@@ -170,11 +144,6 @@ func (cfg *config) startClient() {
 		ends[j] = cfg.net.MakeEnd(cfg.endnames[CLIENT][j])
 		cfg.net.Connect(cfg.endnames[CLIENT][j], j)
 	}
-
-	// The client server doesn't maintain a persistent state
-	cfg.mu.Lock()
-	cfg.saved[CLIENT] = nil
-	cfg.mu.Unlock()
 
 	client := MakeClient(ends)
 
