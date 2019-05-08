@@ -871,8 +871,7 @@ func TestLots(t *testing.T) {
   fmt.Printf("  ... Passed\n")
 }
 
-
-
+// THIS IS OUR CODE //
 func TestReliableVsXP(t *testing.T) {
   runtime.GOMAXPROCS(4)
 
@@ -892,10 +891,10 @@ func TestReliableVsXP(t *testing.T) {
   //rand.Read(op) // Operation is random byte array of size bytes
 
   fmt.Printf("Test: Single proposer ...\n")
-  for i:= 0; i < 1000; i++ {
+  for i:= 0; i < 100; i++ {
     pxa[0].Start(i, string(op))
   }
-  waitn(t, pxa, 999, npaxos)
+  waitn(t, pxa, 99, npaxos)
 
   fmt.Printf("[test] Starting %d\n",0)
   
@@ -903,3 +902,43 @@ func TestReliableVsXP(t *testing.T) {
   fmt.Printf("  ... Passed\n")
 
 }
+
+func benchmark(n int, size int, b *testing.B) {
+  runtime.GOMAXPROCS(4)
+
+  var npaxos = n - 1
+  var pxa []*Paxos = make([]*Paxos, npaxos)
+  var pxh []string = make([]string, npaxos)
+  defer cleanup(pxa)
+
+  for i := 0; i < npaxos; i++ {
+    pxh[i] = port("basic", i)
+  }
+  for i := 0; i < npaxos; i++ {
+    pxa[i] = Make(pxh, i, nil)
+  }
+
+  op := make([]byte, size)
+  rand.Read(op) // Operation is random byte array of size bytes
+
+  var i int
+  for i = 0; i < b.N; i++ {
+    pxa[0].Start(i, string(op))
+  }
+  waitn(nil, pxa, i - 1, npaxos)
+}
+
+func Benchmark_3_1kB(b *testing.B) { benchmark(4, 1024, b) }
+func Benchmark_3_2kB(b *testing.B) { benchmark(4, 2048, b) }
+func Benchmark_3_4kB(b *testing.B) { benchmark(4, 4096, b) }
+func Benchmark_3_8kB(b *testing.B) { benchmark(4, 8192, b) }
+func Benchmark_3_16kB(b *testing.B) { benchmark(4, 16384, b) }
+func Benchmark_3_32kB(b *testing.B) { benchmark(4, 32768, b) }
+func Benchmark_3_64kB(b *testing.B) { benchmark(4, 65536, b) }
+func Benchmark_3_128kB(b *testing.B) { benchmark(4, 131072, b) }
+func Benchmark_3_256kB(b *testing.B) { benchmark(4, 262144, b) }
+func Benchmark_3_512kB(b *testing.B) { benchmark(4, 524288, b) }
+func Benchmark_3_1MB(b *testing.B) { benchmark(4, 1048576, b) }
+func Benchmark_3_2MB(b *testing.B) { benchmark(4, 2097152, b) }
+func Benchmark_3_4MB(b *testing.B) { benchmark(4, 4194304, b) }
+func Benchmark_3_8MB(b *testing.B) { benchmark(4, 8388608, b) }

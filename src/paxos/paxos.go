@@ -26,7 +26,7 @@ import "log"
 import "os"
 import "syscall"
 import "sync"
-import "fmt"
+//import "fmt"
 import "math"
 import "math/rand"
 import "sort"
@@ -138,7 +138,7 @@ func call(srv string, name string, args interface{}, reply interface{}) bool {
 		return true
 	}
 
-	fmt.Println(err)
+	//fmt.Println(err)
 	return false
 }
 
@@ -664,7 +664,7 @@ func Make(peers []string, me int, rpcs *rpc.Server) *Paxos {
 						f, _ := c1.File()
 						err := syscall.Shutdown(int(f.Fd()), syscall.SHUT_WR)
 						if err != nil {
-							fmt.Printf("shutdown: %v\n", err)
+							//fmt.Printf("shutdown: %v\n", err)
 						}
 						px.rpcCount++
 						go rpcs.ServeConn(conn)
@@ -676,7 +676,7 @@ func Make(peers []string, me int, rpcs *rpc.Server) *Paxos {
 					conn.Close()
 				}
 				if err != nil && px.dead == false {
-					fmt.Printf("Paxos(%v) accept: %v\n", me, err.Error())
+					//fmt.Printf("Paxos(%v) accept: %v\n", me, err.Error())
 				}
 			}
 		}()
