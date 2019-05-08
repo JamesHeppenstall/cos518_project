@@ -873,14 +873,14 @@ func TestLots(t *testing.T) {
 }
 
 //
-// --------------------- BENCHMARK FUNCTIONS (SEE XPAXOS) ---------------------
+// --------------------- BENCHMARK FUNCTIONS (FOR XPAXOS) ---------------------
 //
 func benchmark(n int, size int, b *testing.B) {
 	log.SetFlags(0)
 	log.SetOutput(ioutil.Discard)
 	runtime.GOMAXPROCS(4)
 
-	var npaxos = n - 1 // The number of Paxos servers is n-1
+	var npaxos = n / 2 // The number of Paxos servers (we only need a majority)
 	var pxa []*Paxos = make([]*Paxos, npaxos)
 	var pxh []string = make([]string, npaxos)
 	defer cleanup(pxa)
