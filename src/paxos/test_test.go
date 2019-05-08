@@ -870,3 +870,36 @@ func TestLots(t *testing.T) {
   }
   fmt.Printf("  ... Passed\n")
 }
+
+
+
+func TestReliableVsXP(t *testing.T) {
+  runtime.GOMAXPROCS(4)
+
+  const npaxos = 3
+  var pxa []*Paxos = make([]*Paxos, npaxos)
+  var pxh []string = make([]string, npaxos)
+  defer cleanup(pxa)
+
+  for i := 0; i < npaxos; i++ {
+    pxh[i] = port("basic", i)
+  }
+  for i := 0; i < npaxos; i++ {
+    pxa[i] = Make(pxh, i, nil)
+  }
+
+  op := make([]byte, 1024)
+  //rand.Read(op) // Operation is random byte array of size bytes
+
+  fmt.Printf("Test: Single proposer ...\n")
+  for i:= 0; i < 1000; i++ {
+    pxa[0].Start(i, string(op))
+  }
+  waitn(t, pxa, 999, npaxos)
+
+  fmt.Printf("[test] Starting %d\n",0)
+  
+
+  fmt.Printf("  ... Passed\n")
+
+}
