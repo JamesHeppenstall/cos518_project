@@ -49,6 +49,8 @@ func (client *Client) Propose(op interface{}) { // For simplicity, we assume the
 	if WAIT == false {
 		timer = time.NewTimer(TIMEOUT * time.Millisecond).C
 	}
+
+	client.timestamp++
 	client.mu.Unlock()
 
 	select {
@@ -59,10 +61,6 @@ func (client *Client) Propose(op interface{}) { // For simplicity, we assume the
 	case <-client.vcCh:
 		iPrintf("Success: committed request after view change (%d)", client.timestamp)
 	}
-
-	client.mu.Lock()
-	client.timestamp++
-	client.mu.Unlock()
 }
 
 func (client *Client) ConfirmVC(msg Message, reply *Reply) {
