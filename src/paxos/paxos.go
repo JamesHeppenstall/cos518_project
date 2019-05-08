@@ -1,5 +1,7 @@
 package paxos
 
+// CREDIT - https://github.com/pranjalv123/mexos
+
 //
 // Paxos library, to be included in an application.
 // Multiple applications will run, each including
