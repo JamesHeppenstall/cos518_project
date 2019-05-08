@@ -495,7 +495,7 @@ func (px *Paxos) Start(seq int, v interface{}) {
 	if seq >= px.Min() {
 		px.mu.Lock()
 		px.mu.Unlock()
-		go px.proposer(seq, v)
+		px.proposer(seq, v) // THIS IS OUR CODE - changed from go
 	}
 
 }
