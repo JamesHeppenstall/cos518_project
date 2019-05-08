@@ -7,7 +7,7 @@ import (
 )
 
 // TO RUN TESTS      - "go test -run=Test [-count=10]"
-// TO RUN BENCHMARKS - "go test -run=Benchmark -bench=. [-benchtime=5s]" 
+// TO RUN BENCHMARKS - "go test -run=Benchmark -bench=." 
 //
 // => Try to set number of servers in each test to an even number (i.e. one client server
 //    and an odd number of XPaxos servers)
@@ -201,6 +201,7 @@ func benchmark(n int, size int, b *testing.B) {
 	}
 }
 
+// Benchmark_3 - Number of XPaxos servers = 3 (t=1)
 func Benchmark_3_1kB(b *testing.B) { benchmark(4, 1024, b) }
 func Benchmark_3_2kB(b *testing.B) { benchmark(4, 2048, b) }
 func Benchmark_3_4kB(b *testing.B) { benchmark(4, 4096, b) }
@@ -215,3 +216,35 @@ func Benchmark_3_1MB(b *testing.B) { benchmark(4, 1048576, b) }
 func Benchmark_3_2MB(b *testing.B) { benchmark(4, 2097152, b) }
 func Benchmark_3_4MB(b *testing.B) { benchmark(4, 4194304, b) }
 func Benchmark_3_8MB(b *testing.B) { benchmark(4, 8388608, b) }
+
+// Benchmark_5 - Number of XPaxos servers = 5 (t=2)
+func Benchmark_5_1kB(b *testing.B) { benchmark(6, 1024, b) }
+func Benchmark_5_2kB(b *testing.B) { benchmark(6, 2048, b) }
+func Benchmark_5_4kB(b *testing.B) { benchmark(6, 4096, b) }
+func Benchmark_5_8kB(b *testing.B) { benchmark(6, 8192, b) }
+func Benchmark_5_16kB(b *testing.B) { benchmark(6, 16384, b) }
+func Benchmark_5_32kB(b *testing.B) { benchmark(6, 32768, b) }
+func Benchmark_5_64kB(b *testing.B) { benchmark(6, 65536, b) }
+func Benchmark_5_128kB(b *testing.B) { benchmark(6, 131072, b) }
+func Benchmark_5_256kB(b *testing.B) { benchmark(6, 262144, b) }
+func Benchmark_5_512kB(b *testing.B) { benchmark(6, 524288, b) }
+func Benchmark_5_1MB(b *testing.B) { benchmark(6, 1048576, b) }
+func Benchmark_5_2MB(b *testing.B) { benchmark(6, 2097152, b) }
+func Benchmark_5_4MB(b *testing.B) { benchmark(6, 4194304, b) }
+func Benchmark_5_8MB(b *testing.B) { benchmark(6, 8388608, b) }
+
+// Benchmark_11 - Number of XPaxos servers = 11 (t=5)
+func Benchmark_11_1kB(b *testing.B) { benchmark(12, 1024, b) }
+func Benchmark_11_2kB(b *testing.B) { benchmark(12, 2048, b) }
+func Benchmark_11_4kB(b *testing.B) { benchmark(12, 4096, b) }
+func Benchmark_11_8kB(b *testing.B) { benchmark(12, 8192, b) }
+func Benchmark_11_16kB(b *testing.B) { benchmark(12, 16384, b) }
+func Benchmark_11_32kB(b *testing.B) { benchmark(12, 32768, b) }
+func Benchmark_11_64kB(b *testing.B) { benchmark(12, 65536, b) }
+func Benchmark_11_128kB(b *testing.B) { benchmark(12, 131072, b) }
+func Benchmark_11_256kB(b *testing.B) { benchmark(12, 262144, b) }
+func Benchmark_11_512kB(b *testing.B) { benchmark(12, 524288, b) }
+func Benchmark_11_1MB(b *testing.B) { benchmark(12, 1048576, b) }
+func Benchmark_11_2MB(b *testing.B) { benchmark(12, 2097152, b) }
+func Benchmark_11_4MB(b *testing.B) { benchmark(12, 4194304, b) }
+func Benchmark_11_8MB(b *testing.B) { benchmark(12, 8388608, b) }
