@@ -90,6 +90,8 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 
 		xp.executeSeqNum++
 		reply.Success = true
+	} else {
+		go xp.issuePing(xp.getLeader(), xp.view)
 	}
 	xp.mu.Unlock()
 }
@@ -282,6 +284,28 @@ func (xp *XPaxos) Commit(msg Message, reply *Reply) {
 		reply.Suspicious = true
 		go xp.issueSuspect(xp.view)
 	}
+}
+
+//
+// --------------------------------- PING RPC ---------------------------------
+//
+func (xp *XPaxos) sendPing(server int, view int, reply *Reply) bool {
+	dPrintf("Ping: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
+	return xp.replicas[server].Call("XPaxos.Ping", view, reply, xp.id)
+}
+
+func (xp *XPaxos) issuePing(server int, view int) {
+	reply := &Reply{}
+
+	if ok := xp.sendPing(server, view, reply); ok {
+		return
+	} else {
+		go xp.issueSuspect(view)
+	}
+}
+
+func (xp *XPaxos) Ping(view int, reply *Reply) {
+	return
 }
 
 //
