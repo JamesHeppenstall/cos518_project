@@ -101,7 +101,7 @@ func TestFullNetworkPartition1(t *testing.T) {
 	// XPaxos server (ID = 2) fails to send RPCs 100% of the time
 	cfg.net.SetFaultRate(2, 100)
 
-	fmt.Println("Test: Full Network Partition (t=1)")
+	fmt.Println("Test: Full Network Partition - Single Crash Failure (t=1)")
 
 	iters := 3
 	for i := 0; i < iters; i++ {
@@ -128,7 +128,7 @@ func TestFullNetworkPartition2(t *testing.T) {
 	cfg.net.SetFaultRate(4, 100)
 	cfg.net.SetFaultRate(6, 100)
 
-	fmt.Println("Test: Full Network Partition (t>1)")
+	fmt.Println("Test: Full Network Partition - Single Crash Failure (t>1)")
 
 	iters := 3
 	for i := 0; i < iters; i++ {
@@ -138,6 +138,157 @@ func TestFullNetworkPartition2(t *testing.T) {
 		comparePrepareLogEntries(cfg)
 		compareCommitLogEntries(cfg)
 	}
+}
+
+func TestFullNetworkPartition3(t *testing.T) {
+	servers := 4
+	cfg := makeConfig(t, servers, false)
+	defer cfg.cleanup()
+
+	cfg.net.SetFaultRate(2, 100)
+
+	fmt.Println("Test: Full Network Partition - Multiple Crash Failures (t=1)")
+
+	iters := 10
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+	}
+
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
+
+	cfg.net.SetFaultRate(2, 0)
+	cfg.net.SetFaultRate(3, 100)
+
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+	}
+
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
+
+	cfg.net.SetFaultRate(3, 0)
+	cfg.net.SetFaultRate(1, 100)
+
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+	}
+
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
+}
+
+func TestFullNetworkPartition4(t *testing.T) {
+	servers := 4
+	cfg := makeConfig(t, servers, false)
+	defer cfg.cleanup()
+
+	crash := rand.Intn(servers - 1) + 1
+	cfg.net.SetFaultRate(crash, 100)
+
+	fmt.Println("Test: Full Network Partition - Multiple Crash Failures (t=1)")
+
+	iters := 50
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+		cfg.net.SetFaultRate(crash, 0)
+		crash = rand.Intn(servers - 1) + 1
+		cfg.net.SetFaultRate(crash, 100)
+	}
+
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
+}
+
+func TestFullNetworkPartition5(t *testing.T) {
+	servers := 10
+	cfg := makeConfig(t, servers, false)
+	defer cfg.cleanup()
+
+	cfg.net.SetFaultRate(2, 100)
+	cfg.net.SetFaultRate(4, 100)
+	cfg.net.SetFaultRate(6, 100)
+
+	fmt.Println("Test: Full Network Partition - Multiple Crash Failures (t>1)")
+
+	iters := 10
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+	}
+
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
+
+	cfg.net.SetFaultRate(2, 0)
+	cfg.net.SetFaultRate(4, 0)
+	cfg.net.SetFaultRate(6, 0)
+	cfg.net.SetFaultRate(3, 100)
+	cfg.net.SetFaultRate(5, 100)
+	cfg.net.SetFaultRate(7, 100)
+
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+	}
+
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
+
+	cfg.net.SetFaultRate(3, 0)
+	cfg.net.SetFaultRate(5, 0)
+	cfg.net.SetFaultRate(7, 0)
+	cfg.net.SetFaultRate(1, 100)
+	cfg.net.SetFaultRate(8, 100)
+	cfg.net.SetFaultRate(9, 100)
+	
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+	}
+
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
+}
+
+func TestFullNetworkPartition6(t *testing.T) {
+	servers := 10
+	cfg := makeConfig(t, servers, false)
+	defer cfg.cleanup()
+
+	crash1 := rand.Intn(servers - 1) + 1
+	crash2 := rand.Intn(servers - 1) + 1
+	cfg.net.SetFaultRate(crash1, 100)
+	cfg.net.SetFaultRate(crash2, 100)
+
+	fmt.Println("Test: Full Network Partition - Multiple Crash Failures (t>1)")
+
+	iters := 25
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+		cfg.net.SetFaultRate(crash1, 0)
+		cfg.net.SetFaultRate(crash2, 0)
+		crash1 = rand.Intn(servers - 1) + 1
+		crash2 = rand.Intn(servers - 1) + 1
+		cfg.net.SetFaultRate(crash1, 100)
+		cfg.net.SetFaultRate(crash2, 100)
+	}
+
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
 }
 
 func TestPartialNetworkPartition1(t *testing.T) {
