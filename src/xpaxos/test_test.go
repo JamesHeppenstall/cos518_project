@@ -2,12 +2,12 @@ package xpaxos
 
 import (
 	"fmt"
-	"testing"
 	"math/rand"
+	"testing"
 )
 
 // TO RUN TESTS      - "go test -run=Test [-count=10]"
-// TO RUN BENCHMARKS - "go test -run=Benchmark -bench=." 
+// TO RUN BENCHMARKS - "go test -run=Benchmark -bench=."
 //
 // => Try to set number of servers in each test to an even number (i.e. one client server
 //    and an odd number of XPaxos servers)
@@ -189,7 +189,7 @@ func TestFullNetworkPartition4(t *testing.T) {
 	cfg := makeConfig(t, servers, false)
 	defer cfg.cleanup()
 
-	crash := rand.Intn(servers - 1) + 1
+	crash := rand.Intn(servers-1) + 1
 	cfg.net.SetFaultRate(crash, 100)
 
 	fmt.Println("Test: Full Network Partition - Multiple Crash Failures (t=1)")
@@ -198,7 +198,7 @@ func TestFullNetworkPartition4(t *testing.T) {
 	for i := 0; i < iters; i++ {
 		cfg.client.Propose(nil)
 		cfg.net.SetFaultRate(crash, 0)
-		crash = rand.Intn(servers - 1) + 1
+		crash = rand.Intn(servers-1) + 1
 		cfg.net.SetFaultRate(crash, 100)
 	}
 
@@ -251,7 +251,7 @@ func TestFullNetworkPartition5(t *testing.T) {
 	cfg.net.SetFaultRate(1, 100)
 	cfg.net.SetFaultRate(8, 100)
 	cfg.net.SetFaultRate(9, 100)
-	
+
 	for i := 0; i < iters; i++ {
 		cfg.client.Propose(nil)
 	}
@@ -267,20 +267,20 @@ func TestFullNetworkPartition6(t *testing.T) {
 	cfg := makeConfig(t, servers, false)
 	defer cfg.cleanup()
 
-	crash1 := rand.Intn(servers - 1) + 1
-	crash2 := rand.Intn(servers - 1) + 1
+	crash1 := rand.Intn(servers-1) + 1
+	crash2 := rand.Intn(servers-1) + 1
 	cfg.net.SetFaultRate(crash1, 100)
 	cfg.net.SetFaultRate(crash2, 100)
 
 	fmt.Println("Test: Full Network Partition - Multiple Crash Failures (t>1)")
 
-	iters := 25
+	iters := 20
 	for i := 0; i < iters; i++ {
 		cfg.client.Propose(nil)
 		cfg.net.SetFaultRate(crash1, 0)
 		cfg.net.SetFaultRate(crash2, 0)
-		crash1 = rand.Intn(servers - 1) + 1
-		crash2 = rand.Intn(servers - 1) + 1
+		crash1 = rand.Intn(servers-1) + 1
+		crash2 = rand.Intn(servers-1) + 1
 		cfg.net.SetFaultRate(crash1, 100)
 		cfg.net.SetFaultRate(crash2, 100)
 	}
@@ -299,7 +299,7 @@ func TestPartialNetworkPartition1(t *testing.T) {
 	// XPaxos server (ID = 2) fails to send RPCs 50% of the time
 	cfg.net.SetFaultRate(2, 50)
 
-	fmt.Println("Test: Partial Network Partition (t=1)")
+	fmt.Println("Test: Partial Network Partition - Single Partial Failure (t=1)")
 
 	iters := 3
 	for i := 0; i < iters; i++ {
@@ -312,7 +312,6 @@ func TestPartialNetworkPartition1(t *testing.T) {
 }
 
 // Test sometimes fails if WAIT = false (because client times out before view change protocol completes)
-// Test sometimes fails if WAIT = true (because faulty server still finds its way into synchronous group)
 func TestPartialNetworkPartition2(t *testing.T) {
 	servers := 10
 	cfg := makeConfig(t, servers, false)
@@ -323,7 +322,7 @@ func TestPartialNetworkPartition2(t *testing.T) {
 	cfg.net.SetFaultRate(4, 50)
 	cfg.net.SetFaultRate(6, 25)
 
-	fmt.Println("Test: Partial Network Partition (t>1)")
+	fmt.Println("Test: Partial Network Partition - Single Partial Failure (t>1)")
 
 	iters := 3
 	for i := 0; i < iters; i++ {
@@ -335,17 +334,41 @@ func TestPartialNetworkPartition2(t *testing.T) {
 	}
 }
 
+func TestPartialNetworkPartition3(t *testing.T) {
+	servers := 4
+	cfg := makeConfig(t, servers, false)
+	defer cfg.cleanup()
+
+	partial := rand.Intn(servers-1) + 1
+	cfg.net.SetFaultRate(partial, 50)
+
+	fmt.Println("Test: Partial Network Partition - Multiple Partial Failures (t=1)")
+
+	iters := 50
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+		cfg.net.SetFaultRate(partial, 0)
+		partial = rand.Intn(servers-1) + 1
+		cfg.net.SetFaultRate(partial, 50)
+	}
+
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
+}
+
 //
 // ---------------------------- BENCHMARK FUNCTIONS ---------------------------
 //
 func benchmark(n int, size int, b *testing.B) {
-	servers := n // The number of XPaxos servers is n-1 (client included!) 
+	servers := n // The number of XPaxos servers is n-1 (client included!)
 	cfg := makeConfig(nil, servers, false)
 	defer cfg.cleanup()
 
 	op := make([]byte, size)
 	rand.Read(op) // Operation is random byte array of size bytes
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cfg.client.Propose(op)
@@ -353,49 +376,49 @@ func benchmark(n int, size int, b *testing.B) {
 }
 
 // Benchmark_3 - Number of XPaxos servers = 3 (t=1)
-func Benchmark_3_1kB(b *testing.B) { benchmark(4, 1024, b) }
-func Benchmark_3_2kB(b *testing.B) { benchmark(4, 2048, b) }
-func Benchmark_3_4kB(b *testing.B) { benchmark(4, 4096, b) }
-func Benchmark_3_8kB(b *testing.B) { benchmark(4, 8192, b) }
-func Benchmark_3_16kB(b *testing.B) { benchmark(4, 16384, b) }
-func Benchmark_3_32kB(b *testing.B) { benchmark(4, 32768, b) }
-func Benchmark_3_64kB(b *testing.B) { benchmark(4, 65536, b) }
+func Benchmark_3_1kB(b *testing.B)   { benchmark(4, 1024, b) }
+func Benchmark_3_2kB(b *testing.B)   { benchmark(4, 2048, b) }
+func Benchmark_3_4kB(b *testing.B)   { benchmark(4, 4096, b) }
+func Benchmark_3_8kB(b *testing.B)   { benchmark(4, 8192, b) }
+func Benchmark_3_16kB(b *testing.B)  { benchmark(4, 16384, b) }
+func Benchmark_3_32kB(b *testing.B)  { benchmark(4, 32768, b) }
+func Benchmark_3_64kB(b *testing.B)  { benchmark(4, 65536, b) }
 func Benchmark_3_128kB(b *testing.B) { benchmark(4, 131072, b) }
 func Benchmark_3_256kB(b *testing.B) { benchmark(4, 262144, b) }
 func Benchmark_3_512kB(b *testing.B) { benchmark(4, 524288, b) }
-func Benchmark_3_1MB(b *testing.B) { benchmark(4, 1048576, b) }
-func Benchmark_3_2MB(b *testing.B) { benchmark(4, 2097152, b) }
-func Benchmark_3_4MB(b *testing.B) { benchmark(4, 4194304, b) }
-func Benchmark_3_8MB(b *testing.B) { benchmark(4, 8388608, b) }
+func Benchmark_3_1MB(b *testing.B)   { benchmark(4, 1048576, b) }
+func Benchmark_3_2MB(b *testing.B)   { benchmark(4, 2097152, b) }
+func Benchmark_3_4MB(b *testing.B)   { benchmark(4, 4194304, b) }
+func Benchmark_3_8MB(b *testing.B)   { benchmark(4, 8388608, b) }
 
 // Benchmark_5 - Number of XPaxos servers = 5 (t=2)
-func Benchmark_5_1kB(b *testing.B) { benchmark(6, 1024, b) }
-func Benchmark_5_2kB(b *testing.B) { benchmark(6, 2048, b) }
-func Benchmark_5_4kB(b *testing.B) { benchmark(6, 4096, b) }
-func Benchmark_5_8kB(b *testing.B) { benchmark(6, 8192, b) }
-func Benchmark_5_16kB(b *testing.B) { benchmark(6, 16384, b) }
-func Benchmark_5_32kB(b *testing.B) { benchmark(6, 32768, b) }
-func Benchmark_5_64kB(b *testing.B) { benchmark(6, 65536, b) }
+func Benchmark_5_1kB(b *testing.B)   { benchmark(6, 1024, b) }
+func Benchmark_5_2kB(b *testing.B)   { benchmark(6, 2048, b) }
+func Benchmark_5_4kB(b *testing.B)   { benchmark(6, 4096, b) }
+func Benchmark_5_8kB(b *testing.B)   { benchmark(6, 8192, b) }
+func Benchmark_5_16kB(b *testing.B)  { benchmark(6, 16384, b) }
+func Benchmark_5_32kB(b *testing.B)  { benchmark(6, 32768, b) }
+func Benchmark_5_64kB(b *testing.B)  { benchmark(6, 65536, b) }
 func Benchmark_5_128kB(b *testing.B) { benchmark(6, 131072, b) }
 func Benchmark_5_256kB(b *testing.B) { benchmark(6, 262144, b) }
 func Benchmark_5_512kB(b *testing.B) { benchmark(6, 524288, b) }
-func Benchmark_5_1MB(b *testing.B) { benchmark(6, 1048576, b) }
-func Benchmark_5_2MB(b *testing.B) { benchmark(6, 2097152, b) }
-func Benchmark_5_4MB(b *testing.B) { benchmark(6, 4194304, b) }
-func Benchmark_5_8MB(b *testing.B) { benchmark(6, 8388608, b) }
+func Benchmark_5_1MB(b *testing.B)   { benchmark(6, 1048576, b) }
+func Benchmark_5_2MB(b *testing.B)   { benchmark(6, 2097152, b) }
+func Benchmark_5_4MB(b *testing.B)   { benchmark(6, 4194304, b) }
+func Benchmark_5_8MB(b *testing.B)   { benchmark(6, 8388608, b) }
 
 // Benchmark_11 - Number of XPaxos servers = 11 (t=5)
-func Benchmark_11_1kB(b *testing.B) { benchmark(12, 1024, b) }
-func Benchmark_11_2kB(b *testing.B) { benchmark(12, 2048, b) }
-func Benchmark_11_4kB(b *testing.B) { benchmark(12, 4096, b) }
-func Benchmark_11_8kB(b *testing.B) { benchmark(12, 8192, b) }
-func Benchmark_11_16kB(b *testing.B) { benchmark(12, 16384, b) }
-func Benchmark_11_32kB(b *testing.B) { benchmark(12, 32768, b) }
-func Benchmark_11_64kB(b *testing.B) { benchmark(12, 65536, b) }
+func Benchmark_11_1kB(b *testing.B)   { benchmark(12, 1024, b) }
+func Benchmark_11_2kB(b *testing.B)   { benchmark(12, 2048, b) }
+func Benchmark_11_4kB(b *testing.B)   { benchmark(12, 4096, b) }
+func Benchmark_11_8kB(b *testing.B)   { benchmark(12, 8192, b) }
+func Benchmark_11_16kB(b *testing.B)  { benchmark(12, 16384, b) }
+func Benchmark_11_32kB(b *testing.B)  { benchmark(12, 32768, b) }
+func Benchmark_11_64kB(b *testing.B)  { benchmark(12, 65536, b) }
 func Benchmark_11_128kB(b *testing.B) { benchmark(12, 131072, b) }
 func Benchmark_11_256kB(b *testing.B) { benchmark(12, 262144, b) }
 func Benchmark_11_512kB(b *testing.B) { benchmark(12, 524288, b) }
-func Benchmark_11_1MB(b *testing.B) { benchmark(12, 1048576, b) }
-func Benchmark_11_2MB(b *testing.B) { benchmark(12, 2097152, b) }
-func Benchmark_11_4MB(b *testing.B) { benchmark(12, 4194304, b) }
-func Benchmark_11_8MB(b *testing.B) { benchmark(12, 8388608, b) }
+func Benchmark_11_1MB(b *testing.B)   { benchmark(12, 1048576, b) }
+func Benchmark_11_2MB(b *testing.B)   { benchmark(12, 2097152, b) }
+func Benchmark_11_4MB(b *testing.B)   { benchmark(12, 4194304, b) }
+func Benchmark_11_8MB(b *testing.B)   { benchmark(12, 8388608, b) }
