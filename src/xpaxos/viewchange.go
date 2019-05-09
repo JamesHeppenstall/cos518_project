@@ -226,17 +226,35 @@ func (xp *XPaxos) issueVCFinal(view int) {
 		vcSetCopy[msgDigest] = msg
 	}
 
+	msgDigest := digest(xp.view)
+	signature := xp.sign(msgDigest)
+
 	msg := VCFinalMessage{
-		MsgType:  VCFINAL,
-		View:     xp.view,
-		SenderId: xp.id,
-		VCSet:    vcSetCopy}
+		MsgType:   VCFINAL,
+		MsgDigest: msgDigest,
+		Signature: signature,
+		View:      xp.view,
+		SenderId:  xp.id,
+		VCSet:     vcSetCopy}
 
 	for server, _ := range xp.synchronousGroup {
 		go func(xp *XPaxos, server int, msg VCFinalMessage) {
 			reply := &Reply{}
 
-			if ok := xp.sendVCFinal(server, msg, reply); !ok {
+			if ok := xp.sendVCFinal(server, msg, reply); ok {
+				xp.mu.Lock()
+				if xp.view != msg.View {
+					xp.mu.Unlock()
+					return
+				}
+
+				verification := xp.verify(server, reply.MsgDigest, reply.Signature)
+
+				if bytes.Compare(msg.MsgDigest[:], reply.MsgDigest[:]) != 0 || verification == false {
+					go xp.issueSuspect(xp.view)
+				}
+				xp.mu.Unlock()
+			} else {
 				go xp.issueSuspect(msg.View)
 			}
 		}(xp, server, msg)
@@ -250,98 +268,107 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 		return
 	}
 
-	for senderId, vcSet := range xp.receivedVCFinal { // This could/*should* be made more efficient
-		for _, msg := range vcSet {
-			if xp.view != msg.View {
-				delete(xp.receivedVCFinal, senderId)
+	msgDigest := digest(msg.View)
+	signature := xp.sign(msgDigest)
+	reply.MsgDigest = msgDigest
+	reply.Signature = signature
+
+	if bytes.Compare(msg.MsgDigest[:], msgDigest[:]) == 0 && xp.verify(msg.SenderId, msgDigest, msg.Signature) == true {
+		for senderId, vcSet := range xp.receivedVCFinal { // This could/*should* be made more efficient
+			for _, msg := range vcSet {
+				if xp.view != msg.View {
+					delete(xp.receivedVCFinal, senderId)
+				}
 			}
 		}
-	}
 
-	if xp.synchronousGroup[msg.SenderId] == true {
-		xp.receivedVCFinal[msg.SenderId] = msg.VCSet
+		if xp.synchronousGroup[msg.SenderId] == true {
+			xp.receivedVCFinal[msg.SenderId] = msg.VCSet
 
-		if len(xp.receivedVCFinal) >= len(xp.synchronousGroup) {
-			for _, msg := range msg.VCSet {
-				xp.vcSet[digest(msg)] = msg
-			}
+			if len(xp.receivedVCFinal) >= len(xp.synchronousGroup) {
+				for _, msg := range msg.VCSet {
+					xp.vcSet[digest(msg)] = msg
+				}
 
-			for _, msg := range xp.vcSet {
-				for seqNum, _ := range msg.CommitLog {
-					if len(xp.commitLog) <= seqNum {
-						xp.commitLog = append(xp.commitLog, msg.CommitLog[seqNum])
-					} else {
-						if xp.commitLog[seqNum].View < msg.CommitLog[seqNum].View {
-							xp.commitLog[seqNum] = msg.CommitLog[seqNum]
+				for _, msg := range xp.vcSet {
+					for seqNum, _ := range msg.CommitLog {
+						if len(xp.commitLog) <= seqNum {
+							xp.commitLog = append(xp.commitLog, msg.CommitLog[seqNum])
+						} else {
+							if xp.commitLog[seqNum].View < msg.CommitLog[seqNum].View {
+								xp.commitLog[seqNum] = msg.CommitLog[seqNum]
+							}
 						}
 					}
 				}
-			}
 
-			if xp.id == xp.getLeader() {
-				var request ClientRequest
-				var msg0 Message
-				var newMsg0 Message
-				var msgDigest [32]byte
-				var signature []byte
+				if xp.id == xp.getLeader() {
+					var request ClientRequest
+					var msg0 Message
+					var newMsg0 Message
+					var msgDigest [32]byte
+					var signature []byte
 
-				for seqNum, _ := range xp.commitLog {
-					request = xp.commitLog[seqNum].Request
-					msg0 = xp.commitLog[seqNum].Msg0
-					msgDigest = digest(request)
-					signature = xp.sign(msgDigest)
+					for seqNum, _ := range xp.commitLog {
+						request = xp.commitLog[seqNum].Request
+						msg0 = xp.commitLog[seqNum].Msg0
+						msgDigest = digest(request)
+						signature = xp.sign(msgDigest)
 
-					newMsg0 = Message{
-						MsgType:         PREPARE,
-						MsgDigest:       msgDigest,
-						Signature:       signature,
-						PrepareSeqNum:   seqNum + 1,
-						View:            xp.view,
-						ClientTimestamp: msg0.ClientTimestamp,
-						SenderId:        msg0.SenderId}
+						newMsg0 = Message{
+							MsgType:         PREPARE,
+							MsgDigest:       msgDigest,
+							Signature:       signature,
+							PrepareSeqNum:   seqNum + 1,
+							View:            xp.view,
+							ClientTimestamp: msg0.ClientTimestamp,
+							SenderId:        msg0.SenderId}
 
-					if seqNum < len(xp.prepareLog) {
-						xp.updatePrepareLog(seqNum, request, newMsg0)
-					} else {
-						xp.appendToPrepareLog(request, newMsg0)
+						if seqNum < len(xp.prepareLog) {
+							xp.updatePrepareLog(seqNum, request, newMsg0)
+						} else {
+							xp.appendToPrepareLog(request, newMsg0)
+						}
 					}
-				}
 
-				msg := NewViewMessage{
-					MsgType:    NEWVIEW,
-					View:       xp.view,
-					PrepareLog: xp.prepareLog}
+					msg := NewViewMessage{
+						MsgType:    NEWVIEW,
+						View:       xp.view,
+						PrepareLog: xp.prepareLog}
 
-				numReplies := len(xp.synchronousGroup) - 1
-				replyCh := make(chan bool, numReplies)
+					numReplies := len(xp.synchronousGroup) - 1
+					replyCh := make(chan bool, numReplies)
 
-				for server, _ := range xp.synchronousGroup {
-					if server != xp.id {
-						go xp.issueNewView(server, msg, replyCh)
+					for server, _ := range xp.synchronousGroup {
+						if server != xp.id {
+							go xp.issueNewView(server, msg, replyCh)
+						}
 					}
-				}
-				xp.mu.Unlock()
-
-				timer := time.NewTimer(3 * network.DELTA * time.Millisecond).C
-
-				for i := 0; i < numReplies; i++ {
-					select {
-					case <-timer:
-						dPrintf("Timeout: XPaxos.VCFinal: XPaxos server (%d)\n", xp.id)
-						return
-					case <-replyCh:
-					}
-				}
-
-				xp.mu.Lock()
-				if xp.view != msg.View {
 					xp.mu.Unlock()
-					return
-				}
 
-				go xp.issueNewView(xp.id, msg, replyCh)
+					timer := time.NewTimer(3 * network.DELTA * time.Millisecond).C
+
+					for i := 0; i < numReplies; i++ {
+						select {
+						case <-timer:
+							dPrintf("Timeout: XPaxos.VCFinal: XPaxos server (%d)\n", xp.id)
+							return
+						case <-replyCh:
+						}
+					}
+
+					xp.mu.Lock()
+					if xp.view != msg.View {
+						xp.mu.Unlock()
+						return
+					}
+
+					go xp.issueNewView(xp.id, msg, replyCh)
+				}
 			}
 		}
+	} else {
+		go xp.issueSuspect(xp.view)
 	}
 	xp.mu.Unlock()
 }
