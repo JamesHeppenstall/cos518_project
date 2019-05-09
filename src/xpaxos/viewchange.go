@@ -128,8 +128,13 @@ func (xp *XPaxos) issueViewChange(view int) {
 		return
 	}
 
+	msgDigest := digest(xp.view)
+	signature := xp.sign(msgDigest)
+
 	msg := ViewChangeMessage{
 		MsgType:   VIEWCHANGE,
+		MsgDigest: msgDigest,
+		Signature: signature,
 		View:      xp.view,
 		SenderId:  xp.id,
 		CommitLog: xp.commitLog}
@@ -138,7 +143,20 @@ func (xp *XPaxos) issueViewChange(view int) {
 		go func(xp *XPaxos, server int, msg ViewChangeMessage) {
 			reply := &Reply{}
 
-			if ok := xp.sendViewChange(server, msg, reply); !ok {
+			if ok := xp.sendViewChange(server, msg, reply); ok {
+				xp.mu.Lock()
+				if xp.view != msg.View {
+					xp.mu.Unlock()
+					return
+				}
+
+				verification := xp.verify(server, reply.MsgDigest, reply.Signature)
+
+				if bytes.Compare(msg.MsgDigest[:], reply.MsgDigest[:]) != 0 || verification == false {
+					go xp.issueSuspect(xp.view)
+				}
+				xp.mu.Unlock()
+			} else {
 				go xp.issueSuspect(msg.View)
 			}
 		}(xp, server, msg)
@@ -147,29 +165,39 @@ func (xp *XPaxos) issueViewChange(view int) {
 
 func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 	xp.mu.Lock()
+	msgDigest := digest(msg.View)
+	signature := xp.sign(msgDigest)
+	reply.MsgDigest = msgDigest
+	reply.Signature = signature
+
 	if xp.view == msg.View {
-		xp.vcSet[digest(msg)] = msg
+		if bytes.Compare(msg.MsgDigest[:], msgDigest[:]) == 0 && xp.verify(msg.SenderId, msgDigest, msg.Signature) == true {
+			xp.vcSet[digest(msg)] = msg
 
-		if len(xp.vcSet) == len(xp.replicas)-1 {
-			xp.setVCTimer()
-			go xp.issueVCFinal(xp.view)
-			return
-		}
-		xp.mu.Unlock()
-
-		<-xp.netTimer
-
-		xp.mu.Lock()
-		if xp.view != msg.View {
+			if len(xp.vcSet) == len(xp.replicas)-1 {
+				xp.setVCTimer()
+				go xp.issueVCFinal(xp.view)
+				xp.mu.Unlock()
+				return
+			}
 			xp.mu.Unlock()
-			return
-		}
 
-		if xp.netFlag == false && len(xp.vcSet) >= (len(xp.replicas)+1)/2 {
-			xp.setVCTimer()
-			go xp.issueVCFinal(xp.view)
-		} else if xp.netFlag == false {
-			xp.vcFlag = true
+			<-xp.netTimer
+
+			xp.mu.Lock()
+			if xp.view != msg.View {
+				xp.mu.Unlock()
+				return
+			}
+
+			if xp.netFlag == false && len(xp.vcSet) >= (len(xp.replicas)+1)/2 {
+				xp.setVCTimer()
+				go xp.issueVCFinal(xp.view)
+			} else if xp.netFlag == false {
+				xp.vcFlag = true
+				go xp.issueSuspect(xp.view)
+			}
+		} else {
 			go xp.issueSuspect(xp.view)
 		}
 	}
