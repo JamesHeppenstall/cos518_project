@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// We need to test more Byzantine faults such as bit flipping!
+
 // TO RUN TESTS      - "go test -run=Test [-count=10]"
 // TO RUN BENCHMARKS - "go test -run=Benchmark -bench=."
 //
@@ -350,6 +352,35 @@ func TestPartialNetworkPartition3(t *testing.T) {
 		cfg.net.SetFaultRate(partial, 0)
 		partial = rand.Intn(servers-1) + 1
 		cfg.net.SetFaultRate(partial, 50)
+	}
+
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
+}
+
+func TestPartialNetworkPartition4(t *testing.T) {
+	servers := 10
+	cfg := makeConfig(t, servers, false)
+	defer cfg.cleanup()
+
+	partial1 := rand.Intn(servers-1) + 1
+	partial2 := rand.Intn(servers-1) + 1
+	cfg.net.SetFaultRate(partial1, 25)
+	cfg.net.SetFaultRate(partial2, 75)
+
+	fmt.Println("Test: Partial Network Partition - Multiple Partial Failures (t>1)")
+
+	iters := 20
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+		cfg.net.SetFaultRate(partial1, 0)
+		cfg.net.SetFaultRate(partial2, 0)
+		partial1 = rand.Intn(servers-1) + 1
+		partial2 = rand.Intn(servers-1) + 1
+		cfg.net.SetFaultRate(partial1, 25)
+		cfg.net.SetFaultRate(partial2, 75)
 	}
 
 	comparePrepareSeqNums(cfg)
