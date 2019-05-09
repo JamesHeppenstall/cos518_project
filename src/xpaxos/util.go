@@ -222,11 +222,32 @@ func compareCommitLogEntries(cfg *config) {
 		if cfg.xpServers[i].view == currentView {
 			for j := 1; j < cfg.n; j++ {
 				if cfg.xpServers[i].synchronousGroup[j] == true && digest(cfg.xpServers[j].commitLog) != commitLogDigest {
-					cfg.t.Fatal("Invalid commit logs!")
+					if compareCommitLogEntriesChecker(cfg.xpServers[i].commitLog, cfg.xpServers[j].commitLog) == false {
+						cfg.t.Fatal("Invalid commit logs!")
+					}
 				}
 			}
 		}
 	}
+}
+
+func compareCommitLogEntriesChecker(commitLog1 []CommitLogEntry, commitLog2 []CommitLogEntry) bool {
+	if len(commitLog1) != len(commitLog2) {
+		return false
+	} else {
+		for i, commitEntry := range commitLog1 {
+			if digest(commitEntry.Request) != digest(commitLog2[i].Request) {
+				return false
+			}
+			if digest(commitEntry.Msg0) != digest(commitLog2[i].Msg0) {
+				return false
+			}
+			if commitEntry.View != commitLog2[i].View {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func getCurrentView(cfg *config) int {
