@@ -1,6 +1,7 @@
 package xpaxos
 
 import (
+	"bytes"
 	"network"
 	"time"
 )
@@ -15,6 +16,27 @@ func (xp *XPaxos) sendSuspect(server int, msg SuspectMessage, reply *Reply) bool
 	return xp.replicas[server].Call("XPaxos.Suspect", msg, reply, xp.id)
 }
 
+func (xp *XPaxos) issueSuspectHelper(server int, msg SuspectMessage) {
+	reply := &Reply{}
+
+	if ok := xp.sendSuspect(server, msg, reply); ok {
+		xp.mu.Lock()
+		if xp.view != msg.View {
+			xp.mu.Unlock()
+			return
+		}
+
+		verification := xp.verify(server, reply.MsgDigest, reply.Signature)
+
+		if bytes.Compare(msg.MsgDigest[:], reply.MsgDigest[:]) != 0 || verification == false {
+			go xp.issueSuspect(xp.view)
+		}
+		xp.mu.Unlock()
+	} else {
+		go xp.issueSuspect(msg.View)
+	}
+}
+
 func (xp *XPaxos) issueSuspect(view int) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
@@ -23,16 +45,19 @@ func (xp *XPaxos) issueSuspect(view int) {
 		return
 	}
 
-	msg := SuspectMessage{
-		MsgType:  SUSPECT,
-		View:     xp.view,
-		SenderId: xp.id}
+	msgDigest := digest(xp.view)
+	signature := xp.sign(msgDigest)
 
-	reply := &Reply{}
+	msg := SuspectMessage{
+		MsgType:   SUSPECT,
+		MsgDigest: msgDigest,
+		Signature: signature,
+		View:      xp.view,
+		SenderId:  xp.id}
 
 	for server, _ := range xp.replicas {
 		if server != CLIENT {
-			go xp.sendSuspect(server, msg, reply)
+			go xp.issueSuspectHelper(server, msg)
 		}
 	}
 }
@@ -45,11 +70,9 @@ func (xp *XPaxos) forwardSuspect(msg SuspectMessage) {
 		return
 	}
 
-	reply := &Reply{}
-
 	for server, _ := range xp.replicas {
 		if server != CLIENT {
-			go xp.sendSuspect(server, msg, reply)
+			go xp.issueSuspectHelper(server, msg)
 		}
 	}
 }
@@ -58,24 +81,33 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 	xp.mu.Lock()
 	defer xp.mu.Unlock()
 
+	msgDigest := digest(msg.View)
+	signature := xp.sign(msgDigest)
+	reply.MsgDigest = msgDigest
+	reply.Signature = signature
+
 	_, ok := xp.suspectSet[digest(msg)]
 
 	if xp.view <= msg.View && ok == false {
-		xp.suspectSet[digest(msg)] = msg
+		if bytes.Compare(msg.MsgDigest[:], msgDigest[:]) == 0 && xp.verify(msg.SenderId, msgDigest, msg.Signature) == true {
+			xp.suspectSet[digest(msg)] = msg
 
-		xp.view = msg.View + 1
-		go xp.forwardSuspect(msg)
+			xp.view = msg.View + 1
+			go xp.forwardSuspect(msg)
 
-		xp.generateSynchronousGroup(int64(xp.view))
-		xp.vcSet = make(map[[32]byte]ViewChangeMessage, 0)
-		xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
-		xp.vcInProgress = true
+			xp.generateSynchronousGroup(int64(xp.view))
+			xp.vcSet = make(map[[32]byte]ViewChangeMessage, 0)
+			xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
+			xp.vcInProgress = true
 
-		go xp.issueViewChange(xp.view)
+			go xp.issueViewChange(xp.view)
 
-		if len(xp.synchronousGroup) > 0 {
-			xp.netFlag = false
-			xp.netTimer = time.NewTimer(3 * network.DELTA * time.Millisecond).C
+			if len(xp.synchronousGroup) > 0 {
+				xp.netFlag = false
+				xp.netTimer = time.NewTimer(3 * network.DELTA * time.Millisecond).C
+			}
+		} else {
+			go xp.issueSuspect(xp.view)
 		}
 	}
 }
