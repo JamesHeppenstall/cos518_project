@@ -276,7 +276,7 @@ func TestFullNetworkPartition6(t *testing.T) {
 
 	fmt.Println("Test: Full Network Partition - Multiple Crash Failures (t>1)")
 
-	iters := 20
+	iters := 10
 	for i := 0; i < iters; i++ {
 		cfg.client.Propose(nil)
 		cfg.net.SetFaultRate(crash1, 0)
@@ -372,7 +372,7 @@ func TestPartialNetworkPartition4(t *testing.T) {
 
 	fmt.Println("Test: Partial Network Partition - Multiple Partial Failures (t>1)")
 
-	iters := 20
+	iters := 10
 	for i := 0; i < iters; i++ {
 		cfg.client.Propose(nil)
 		cfg.net.SetFaultRate(partial1, 0)
