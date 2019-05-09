@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-// We need to add crytographic digests/signatures to the view change RPCs!
-
 //
 // -------------------------------- SUSPECT RPC -------------------------------
 //
@@ -331,10 +329,16 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 						}
 					}
 
+					msgDigest = digest(xp.view)
+					signature = xp.sign(msgDigest)
+
 					msg := NewViewMessage{
 						MsgType:    NEWVIEW,
+						MsgDigest:  msgDigest,
+						Signature:  signature,
 						View:       xp.view,
-						PrepareLog: xp.prepareLog}
+						PrepareLog: xp.prepareLog,
+						SenderId:   xp.id}
 
 					numReplies := len(xp.synchronousGroup) - 1
 					replyCh := make(chan bool, numReplies)
@@ -391,8 +395,14 @@ func (xp *XPaxos) issueNewView(server int, msg NewViewMessage, replyCh chan bool
 			return
 		}
 
-		if reply.Success == true {
-			replyCh <- reply.Success
+		verification := xp.verify(server, reply.MsgDigest, reply.Signature)
+
+		if bytes.Compare(msg.MsgDigest[:], reply.MsgDigest[:]) == 0 && verification == true {
+			if reply.Success == true {
+				replyCh <- reply.Success
+			}
+		} else {
+			go xp.issueSuspect(xp.view)
 		}
 		xp.mu.Unlock()
 	} else {
@@ -408,23 +418,32 @@ func (xp *XPaxos) NewView(msg NewViewMessage, reply *Reply) {
 		return
 	}
 
+	msgDigest := digest(msg.View)
+	signature := xp.sign(msgDigest)
+	reply.MsgDigest = msgDigest
+	reply.Signature = signature
+
 	xp.vcFlag = true
 
-	if xp.compareLogs(msg.PrepareLog, xp.commitLog) {
-		xp.prepareLog = msg.PrepareLog
-		xp.prepareSeqNum = len(xp.prepareLog)
-		xp.executeSeqNum = len(xp.commitLog)
+	if bytes.Compare(msg.MsgDigest[:], msgDigest[:]) == 0 && xp.verify(msg.SenderId, msgDigest, msg.Signature) == true {
+		if xp.compareLogs(msg.PrepareLog, xp.commitLog) {
+			xp.prepareLog = msg.PrepareLog
+			xp.prepareSeqNum = len(xp.prepareLog)
+			xp.executeSeqNum = len(xp.commitLog)
 
-		xp.suspectSet = make(map[[32]byte]SuspectMessage, 0)
-		xp.vcSet = make(map[[32]byte]ViewChangeMessage, 0)
-		xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
-		xp.vcInProgress = false
+			xp.suspectSet = make(map[[32]byte]SuspectMessage, 0)
+			xp.vcSet = make(map[[32]byte]ViewChangeMessage, 0)
+			xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
+			xp.vcInProgress = false
 
-		if xp.id == xp.getLeader() {
-			go xp.issueConfirmVC()
+			if xp.id == xp.getLeader() {
+				go xp.issueConfirmVC()
+			}
+
+			reply.Success = true
+		} else {
+			go xp.issueSuspect(xp.view)
 		}
-
-		reply.Success = true
 	} else {
 		go xp.issueSuspect(xp.view)
 	}

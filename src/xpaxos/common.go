@@ -139,4 +139,5 @@ type NewViewMessage struct {
 	Signature  []byte
 	View       int
 	PrepareLog []PrepareLogEntry
+	SenderId   int
 }
