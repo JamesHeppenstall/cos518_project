@@ -9,7 +9,10 @@ import (
 // We need to test more Byzantine faults such as bit flipping!
 
 // TO RUN TESTS      - "go test -run=Test [-count=10]" (n.b. set common.go/DEBUG > 0)
-// TO RUN BENCHMARKS - "go test -run=Benchmark -bench=." (n.b. set common.go/DEBUG = 0)
+// TO RUN BENCHMARKS - "go test -run=XXX -bench=. [-benchtime=100x]" (n.b. set common.go/DEBUG = 0)
+//
+// Alternatively, use "go test -run=XXX -bench=3_0" to only run the Benchmark_3_0* benchmarks
+// It is prudent to only run one set of benchmarks at a time (otherwise Golang often exits due to high thread count)
 //
 // => Try to set number of servers in each test to an even number (i.e. one client server
 //    and an odd number of XPaxos servers)
@@ -406,22 +409,6 @@ func benchmarkNoFaults(n int, size int, b *testing.B) {
 	}
 }
 
-func benchmarkOneCrashFault(n int, size int, b *testing.B) {
-	servers := n // The number of XPaxos servers is n-1 (client included!)
-	cfg := makeConfig(nil, servers, false)
-	defer cfg.cleanup()
-
-	cfg.net.SetFaultRate(2, 100)
-
-	op := make([]byte, size)
-	rand.Read(op) // Operation is random byte array of size bytes
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		cfg.client.Propose(op)
-	}
-}
-
 func benchmarkRandomCrashFaults(n int, size int, b *testing.B) {
 	servers := n // The number of XPaxos servers is n-1 (client included!)
 	cfg := makeConfig(nil, servers, false)
@@ -490,54 +477,6 @@ func Benchmark_11_0_2MB(b *testing.B)   { benchmarkNoFaults(12, 2097152, b) }
 func Benchmark_11_0_4MB(b *testing.B)   { benchmarkNoFaults(12, 4194304, b) }
 func Benchmark_11_0_8MB(b *testing.B)   { benchmarkNoFaults(12, 8388608, b) }
 
-// Benchmark_3_1 - Number of XPaxos servers = 3 (t=1), One Crash Fault
-func Benchmark_3_1_1kB(b *testing.B)   { benchmarkOneCrashFault(4, 1024, b) }
-func Benchmark_3_1_2kB(b *testing.B)   { benchmarkOneCrashFault(4, 2048, b) }
-func Benchmark_3_1_4kB(b *testing.B)   { benchmarkOneCrashFault(4, 4096, b) }
-func Benchmark_3_1_8kB(b *testing.B)   { benchmarkOneCrashFault(4, 8192, b) }
-func Benchmark_3_1_16kB(b *testing.B)  { benchmarkOneCrashFault(4, 16384, b) }
-func Benchmark_3_1_32kB(b *testing.B)  { benchmarkOneCrashFault(4, 32768, b) }
-func Benchmark_3_1_64kB(b *testing.B)  { benchmarkOneCrashFault(4, 65536, b) }
-func Benchmark_3_1_128kB(b *testing.B) { benchmarkOneCrashFault(4, 131072, b) }
-func Benchmark_3_1_256kB(b *testing.B) { benchmarkOneCrashFault(4, 262144, b) }
-func Benchmark_3_1_512kB(b *testing.B) { benchmarkOneCrashFault(4, 524288, b) }
-func Benchmark_3_1_1MB(b *testing.B)   { benchmarkOneCrashFault(4, 1048576, b) }
-func Benchmark_3_1_2MB(b *testing.B)   { benchmarkOneCrashFault(4, 2097152, b) }
-func Benchmark_3_1_4MB(b *testing.B)   { benchmarkOneCrashFault(4, 4194304, b) }
-func Benchmark_3_1_8MB(b *testing.B)   { benchmarkOneCrashFault(4, 8388608, b) }
-
-// Benchmark_5_1 - Number of XPaxos servers = 5 (t=2), One Crash Fault
-func Benchmark_5_1_1kB(b *testing.B)   { benchmarkOneCrashFault(6, 1024, b) }
-func Benchmark_5_1_2kB(b *testing.B)   { benchmarkOneCrashFault(6, 2048, b) }
-func Benchmark_5_1_4kB(b *testing.B)   { benchmarkOneCrashFault(6, 4096, b) }
-func Benchmark_5_1_8kB(b *testing.B)   { benchmarkOneCrashFault(6, 8192, b) }
-func Benchmark_5_1_16kB(b *testing.B)  { benchmarkOneCrashFault(6, 16384, b) }
-func Benchmark_5_1_32kB(b *testing.B)  { benchmarkOneCrashFault(6, 32768, b) }
-func Benchmark_5_1_64kB(b *testing.B)  { benchmarkOneCrashFault(6, 65536, b) }
-func Benchmark_5_1_128kB(b *testing.B) { benchmarkOneCrashFault(6, 131072, b) }
-func Benchmark_5_1_256kB(b *testing.B) { benchmarkOneCrashFault(6, 262144, b) }
-func Benchmark_5_1_512kB(b *testing.B) { benchmarkOneCrashFault(6, 524288, b) }
-func Benchmark_5_1_1MB(b *testing.B)   { benchmarkOneCrashFault(6, 1048576, b) }
-func Benchmark_5_1_2MB(b *testing.B)   { benchmarkOneCrashFault(6, 2097152, b) }
-func Benchmark_5_1_4MB(b *testing.B)   { benchmarkOneCrashFault(6, 4194304, b) }
-func Benchmark_5_1_8MB(b *testing.B)   { benchmarkOneCrashFault(6, 8388608, b) }
-
-// Benchmark_11_1 - Number of XPaxos servers = 11 (t=5), One Crash Fault
-func Benchmark_11_1_1kB(b *testing.B)   { benchmarkOneCrashFault(12, 1024, b) }
-func Benchmark_11_1_2kB(b *testing.B)   { benchmarkOneCrashFault(12, 2048, b) }
-func Benchmark_11_1_4kB(b *testing.B)   { benchmarkOneCrashFault(12, 4096, b) }
-func Benchmark_11_1_8kB(b *testing.B)   { benchmarkOneCrashFault(12, 8192, b) }
-func Benchmark_11_1_16kB(b *testing.B)  { benchmarkOneCrashFault(12, 16384, b) }
-func Benchmark_11_1_32kB(b *testing.B)  { benchmarkOneCrashFault(12, 32768, b) }
-func Benchmark_11_1_64kB(b *testing.B)  { benchmarkOneCrashFault(12, 65536, b) }
-func Benchmark_11_1_128kB(b *testing.B) { benchmarkOneCrashFault(12, 131072, b) }
-func Benchmark_11_1_256kB(b *testing.B) { benchmarkOneCrashFault(12, 262144, b) }
-func Benchmark_11_1_512kB(b *testing.B) { benchmarkOneCrashFault(12, 524288, b) }
-func Benchmark_11_1_1MB(b *testing.B)   { benchmarkOneCrashFault(12, 1048576, b) }
-func Benchmark_11_1_2MB(b *testing.B)   { benchmarkOneCrashFault(12, 2097152, b) }
-func Benchmark_11_1_4MB(b *testing.B)   { benchmarkOneCrashFault(12, 4194304, b) }
-func Benchmark_11_1_8MB(b *testing.B)   { benchmarkOneCrashFault(12, 8388608, b) }
-
 // Benchmark_3_R - Number of XPaxos servers = 3 (t=1), Random Crash Faults
 func Benchmark_3_R_1kB(b *testing.B)   { benchmarkRandomCrashFaults(4, 1024, b) }
 func Benchmark_3_R_2kB(b *testing.B)   { benchmarkRandomCrashFaults(4, 2048, b) }
@@ -570,7 +509,7 @@ func Benchmark_5_R_2MB(b *testing.B)   { benchmarkRandomCrashFaults(6, 2097152, 
 func Benchmark_5_R_4MB(b *testing.B)   { benchmarkRandomCrashFaults(6, 4194304, b) }
 func Benchmark_5_R_8MB(b *testing.B)   { benchmarkRandomCrashFaults(6, 8388608, b) }
 
-// Benchmark_R1_R - Number of XPaxos servers = 11 (t=5), Random Crash Faults
+// Benchmark_11_R - Number of XPaxos servers = 11 (t=5), Random Crash Faults
 func Benchmark_11_R_1kB(b *testing.B)   { benchmarkRandomCrashFaults(12, 1024, b) }
 func Benchmark_11_R_2kB(b *testing.B)   { benchmarkRandomCrashFaults(12, 2048, b) }
 func Benchmark_11_R_4kB(b *testing.B)   { benchmarkRandomCrashFaults(12, 4096, b) }
