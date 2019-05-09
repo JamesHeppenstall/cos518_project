@@ -5,8 +5,8 @@ import (
 	"sync"
 )
 
-const DEBUG = 1  // Debugging (0 = None, 1 = Info, 2 = Debug)
-const DELTA = 50 // Network time frame delta for XPaxos synchronous group (in milliseconds)
+const DEBUG = 1   // Debugging (0 = None, 1 = Info, 2 = Debug)
+const DELTA = 100 // Network time frame delta for XPaxos synchronous group (in milliseconds)
 
 type Network struct {
 	mu             sync.Mutex
