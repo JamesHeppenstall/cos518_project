@@ -115,7 +115,7 @@ func (xp *XPaxos) issuePrepare(server int, prepareEntry PrepareLogEntry, replyCh
 		}
 
 		verification := xp.verify(server, reply.MsgDigest, reply.Signature)
-		
+
 		if bytes.Compare(prepareEntry.Msg0.MsgDigest[:], reply.MsgDigest[:]) == 0 && verification == true {
 			if reply.Success == true {
 				replyCh <- reply.Success
@@ -333,6 +333,7 @@ func Make(replicas []*network.ClientEnd, id int, privateKey *rsa.PrivateKey,
 	xp.vcFlag = false
 	xp.vcTimer = nil
 	xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
+	xp.vcInProgress = false
 
 	xp.generateSynchronousGroup(int64(xp.view))
 	xp.mu.Unlock()

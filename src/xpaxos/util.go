@@ -177,7 +177,10 @@ func comparePrepareSeqNums(cfg *config) {
 		if cfg.xpServers[i].view == currentView {
 			for j := 1; j < cfg.n; j++ {
 				if i != j && cfg.xpServers[i].synchronousGroup[j] == true && cfg.xpServers[j].prepareSeqNum != prepareSeqNum {
-					cfg.t.Fatal("Invalid prepare sequence numbers!")
+					if cfg.xpServers[i].vcInProgress == false && cfg.xpServers[j].vcInProgress == false {
+						iPrintf("%d %d %d %d\n", i, j, cfg.xpServers[i].prepareSeqNum, cfg.xpServers[j].prepareSeqNum)
+						cfg.t.Fatal("Invalid prepare sequence numbers!")
+					}
 				}
 			}
 		}
@@ -192,7 +195,10 @@ func compareExecuteSeqNums(cfg *config) {
 		if cfg.xpServers[i].view == currentView {
 			for j := 1; j < cfg.n; j++ {
 				if i != j && cfg.xpServers[i].synchronousGroup[j] == true && cfg.xpServers[j].executeSeqNum != executeSeqNum {
-					cfg.t.Fatal("Invalid execute sequence numbers!")
+					if cfg.xpServers[i].vcInProgress == false && cfg.xpServers[j].vcInProgress == false {
+						iPrintf("%d %d %d %d\n", i, j, cfg.xpServers[i].executeSeqNum, cfg.xpServers[j].executeSeqNum)
+						cfg.t.Fatal("Invalid execute sequence numbers!")
+					}
 				}
 			}
 		}
@@ -207,7 +213,9 @@ func comparePrepareLogEntries(cfg *config) {
 		if cfg.xpServers[i].view == currentView {
 			for j := 1; j < cfg.n; j++ {
 				if cfg.xpServers[i].synchronousGroup[j] == true && digest(cfg.xpServers[j].prepareLog) != prepareLogDigest {
-					cfg.t.Fatal("Invalid prepare logs!")
+					if cfg.xpServers[i].vcInProgress == false && cfg.xpServers[j].vcInProgress == false {
+						cfg.t.Fatal("Invalid prepare logs!")
+					}
 				}
 			}
 		}
@@ -222,8 +230,10 @@ func compareCommitLogEntries(cfg *config) {
 		if cfg.xpServers[i].view == currentView {
 			for j := 1; j < cfg.n; j++ {
 				if cfg.xpServers[i].synchronousGroup[j] == true && digest(cfg.xpServers[j].commitLog) != commitLogDigest {
-					if compareCommitLogEntriesChecker(cfg.xpServers[i].commitLog, cfg.xpServers[j].commitLog) == false {
-						cfg.t.Fatal("Invalid commit logs!")
+					if cfg.xpServers[i].vcInProgress == false && cfg.xpServers[j].vcInProgress == false {
+						if compareCommitLogEntriesChecker(cfg.xpServers[i].commitLog, cfg.xpServers[j].commitLog) == false {
+							cfg.t.Fatal("Invalid commit logs!")
+						}
 					}
 				}
 			}

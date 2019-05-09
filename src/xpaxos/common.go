@@ -12,6 +12,7 @@ const DEBUG = 1       // Debugging (0 = None, 1 = Info, 2 = Debug)
 const CLIENT = 0      // Client ID is always set to zero - DO NOT CHANGE
 const TIMEOUT = 10000 // Client timeout period (in milliseconds)
 const WAIT = true     // If false, client times out after TIMEOUT milliseconds; if true, client never times out
+const RETRY = 5       // Number of times the client tries to resend a failed replicate RPC
 const BITSIZE = 1024  // RSA private key bit size
 
 const ( // RPC message types for common case and view change protocols
@@ -33,7 +34,7 @@ type config struct {
 	done        int32 // Tell internal threads to die
 	xpServers   []*XPaxos
 	client      *Client
-	connected   []bool // Whether each server is on the net
+	connected   []bool     // Whether each server is on the net
 	endnames    [][]string // The port file names each sends to
 	privateKeys map[int]*rsa.PrivateKey
 	publicKeys  map[int]*rsa.PublicKey
@@ -66,6 +67,7 @@ type XPaxos struct {
 	vcFlag           bool // Flag to tell if vcTimer is still valid
 	vcTimer          <-chan time.Time
 	receivedVCFinal  map[int]map[[32]byte]ViewChangeMessage
+	vcInProgress     bool
 }
 
 type PrepareLogEntry struct {

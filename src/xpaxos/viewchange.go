@@ -69,6 +69,7 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 		xp.generateSynchronousGroup(int64(xp.view))
 		xp.vcSet = make(map[[32]byte]ViewChangeMessage, 0)
 		xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
+		xp.vcInProgress = true
 
 		go xp.issueViewChange(xp.view)
 
@@ -330,6 +331,7 @@ func (xp *XPaxos) NewView(msg NewViewMessage, reply *Reply) {
 		xp.suspectSet = make(map[[32]byte]SuspectMessage, 0)
 		xp.vcSet = make(map[[32]byte]ViewChangeMessage, 0)
 		xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
+		xp.vcInProgress = false
 
 		if xp.id == xp.getLeader() {
 			go xp.issueConfirmVC()
