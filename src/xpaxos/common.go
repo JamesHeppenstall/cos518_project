@@ -68,6 +68,7 @@ type XPaxos struct {
 	vcTimer          <-chan time.Time
 	receivedVCFinal  map[int]map[[32]byte]ViewChangeMessage
 	vcInProgress     bool
+	byzantine        bool
 }
 
 type PrepareLogEntry struct {

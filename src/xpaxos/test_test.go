@@ -392,6 +392,48 @@ func TestPartialNetworkPartition4(t *testing.T) {
 	compareCommitLogEntries(cfg)
 }
 
+func TestByzantineFault1(t *testing.T) {
+	servers := 4
+	cfg := makeConfig(t, servers, false)
+	defer cfg.cleanup()
+
+	// XPaxos server (ID = 2) reshuffles bytes in the signature of messages it sends
+	cfg.xpServers[2].byzantine = true
+
+	fmt.Println("Test: Byzantine Fault - Single Failure (t=1)")
+
+	iters := 3
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+		comparePrepareSeqNums(cfg)
+		compareExecuteSeqNums(cfg)
+		comparePrepareLogEntries(cfg)
+		compareCommitLogEntries(cfg)
+	}
+}
+
+func TestByzantineFault2(t *testing.T) {
+	servers := 10
+	cfg := makeConfig(t, servers, false)
+	defer cfg.cleanup()
+
+	// XPaxos servers (ID = 2, 4, 6) reshuffle bytes in the signature of messages they send
+	cfg.xpServers[2].byzantine = true
+	cfg.xpServers[4].byzantine = true
+	cfg.xpServers[6].byzantine = true
+
+	fmt.Println("Test: Byzantine Fault - Single Failure (t>1)")
+
+	iters := 3
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+		comparePrepareSeqNums(cfg)
+		compareExecuteSeqNums(cfg)
+		comparePrepareLogEntries(cfg)
+		compareCommitLogEntries(cfg)
+	}
+}
+
 //
 // ---------------------------- BENCHMARK FUNCTIONS ---------------------------
 //

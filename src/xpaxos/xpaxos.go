@@ -20,6 +20,7 @@ package xpaxos
 import (
 	"bytes"
 	"crypto/rsa"
+	"math/rand"
 	"network"
 	"time"
 )
@@ -100,6 +101,13 @@ func (xp *XPaxos) Replicate(request ClientRequest, reply *Reply) {
 // -------------------------------- PREPARE RPC -------------------------------
 //
 func (xp *XPaxos) sendPrepare(server int, prepareEntry PrepareLogEntry, reply *Reply) bool {
+	if xp.byzantine == true {
+		for i := len(prepareEntry.Msg0.Signature) - 1; i > 0; i-- {
+			j := rand.Intn(i + 1)
+			prepareEntry.Msg0.Signature[i], prepareEntry.Msg0.Signature[j] = prepareEntry.Msg0.Signature[j], prepareEntry.Msg0.Signature[i]
+		}
+	}
+
 	dPrintf("Prepare: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.Prepare", prepareEntry, reply, xp.id)
 }
@@ -226,6 +234,13 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 // --------------------------------- COMMIT RPC --------------------------------
 //
 func (xp *XPaxos) sendCommit(server int, msg Message, reply *Reply) bool {
+	if xp.byzantine == true {
+		for i := len(msg.Signature) - 1; i > 0; i-- {
+			j := rand.Intn(i + 1)
+			msg.Signature[i], msg.Signature[j] = msg.Signature[j], msg.Signature[i]
+		}
+	}
+
 	dPrintf("Commit: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.Commit", msg, reply, xp.id)
 }
@@ -334,6 +349,7 @@ func Make(replicas []*network.ClientEnd, id int, privateKey *rsa.PrivateKey,
 	xp.vcTimer = nil
 	xp.receivedVCFinal = make(map[int]map[[32]byte]ViewChangeMessage, 0)
 	xp.vcInProgress = false
+	xp.byzantine = false
 
 	xp.generateSynchronousGroup(int64(xp.view))
 	xp.mu.Unlock()
