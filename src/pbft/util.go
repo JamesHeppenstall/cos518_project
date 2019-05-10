@@ -80,14 +80,28 @@ func (pbft *Pbft) generateSynchronousGroup(seed int64) {
 }
 
 func (pbft *Pbft) appendToPrepareLog(request ClientRequest, msg Message) PrepareLogEntry {
-	msgMap := make(map[int]Message)
-	prepareEntry := PrepareLogEntry{
-		Request: request,
-		Msg0:    msg,
-		Msg1:    msgMap}
+	pEDefault := PrepareLogEntry{}
+	for request.Timestamp >= len(pbft.prepareLog) {
+		pbft.prepareLog = append(pbft.prepareLog, pEDefault)
+	}
+	pE := pbft.prepareLog[request.Timestamp];
 
-	pbft.prepareLog = append(pbft.prepareLog, prepareEntry)
-	return prepareEntry
+	if len(pE.Msg1) == 0 {
+		msgMap := make(map[int]Message)
+		msgMap[pbft.id] = msg
+		prepareEntry := PrepareLogEntry{
+			Request: request,
+			Msg0:    msg,
+			Msg1:    msgMap}
+
+		pbft.prepareLog = append(pbft.prepareLog, prepareEntry)
+	} 
+	msgMapCopy :=  make(map[int]Message)
+	prepareEntryCopy := PrepareLogEntry{
+			Request: request,
+			Msg0:    msg,
+			Msg1:    msgMapCopy}
+	return prepareEntryCopy
 }
 
 func (pbft *Pbft) addToPrepareLog(prepareLog PrepareLogEntry) bool  {

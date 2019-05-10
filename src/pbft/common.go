@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const DEBUG = 1       // Debugging (0 = None, 1 = Info, 2 = Debug)
+const DEBUG = 0       // Debugging (0 = None, 1 = Info, 2 = Debug)
 const CLIENT = 0      // Client ID is always set to zero - DO NOT CHANGE
 const TIMEOUT = 500 // Client timeout period (in milliseconds)
 const WAIT = false     // If false, client times out after TIMEOUT milliseconds; if true, client never times out
@@ -15,7 +15,7 @@ const BITSIZE = 1024  // RSA private key bit size
 
 const ( // RPC message types for common case and view change protocols
 	REPLICATE  = iota
-	PREPREPARE    = iota
+	PREPREPARE = iota
 	PREPARE    = iota
 	COMMIT     = iota
 	REPLY      = iota

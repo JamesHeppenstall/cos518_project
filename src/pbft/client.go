@@ -71,7 +71,8 @@ func (client *Client) ConfirmVC(msg Message, reply *Reply) {
 }
 
 func (client *Client) Reply(creply ClientReply, reply *Reply) {
-
+	client.mu.Lock()
+	defer client.mu.Unlock()
 	iPrintf("%d %d %d %d", len(client.replyMap), creply.Timestamp, len(client.replyMap[creply.Timestamp]), creply.Commiter)
 	client.replyMap[creply.Timestamp][creply.Commiter] = true
 	if len(client.replyMap[creply.Timestamp]) >= 2*(len(client.replicas) - 2)/3 && client.committed < creply.Timestamp {

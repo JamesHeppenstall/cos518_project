@@ -35,7 +35,6 @@ func (pbft *Pbft) Replicate(request ClientRequest, reply *Reply) {
 	if pbft.id == pbft.getLeader() { // If XPaxos server is the leader
 		reply.IsLeader = true
 		pbft.mu.Lock()
-		iPrintf("Here")
 		pbft.prepareSeqNum = request.Timestamp
 
 		msg := Message{ // Leader's prepare message
@@ -132,6 +131,7 @@ func (pbft *Pbft) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 					View:            pbft.view,
 					ClientTimestamp: prepareEntry.Request.Timestamp,
 					SenderId:        pbft.id}
+
 				cmsg := CommitMessage {
 					msg, prepareEntry.Request}
 
