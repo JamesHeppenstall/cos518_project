@@ -2,7 +2,7 @@ package xpaxos
 
 import (
 	"bytes"
-	"math/rand"
+	//"math/rand"
 	"network"
 	"time"
 )
@@ -11,12 +11,12 @@ import (
 // -------------------------------- SUSPECT RPC -------------------------------
 //
 func (xp *XPaxos) sendSuspect(server int, msg SuspectMessage, reply *Reply) bool {
-	if xp.byzantine == true {
-		for i := len(msg.Signature) - 1; i > 0; i-- {
-			j := rand.Intn(i + 1)
-			msg.Signature[i], msg.Signature[j] = msg.Signature[j], msg.Signature[i]
-		}
-	}
+	//if xp.byzantine == true {
+	//	for i := len(msg.Signature) - 1; i > 0; i-- {
+	//		j := rand.Intn(i + 1)
+	//		msg.Signature[i], msg.Signature[j] = msg.Signature[j], msg.Signature[i]
+	//	}
+	//}
 
 	dPrintf("Suspect: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.Suspect", msg, reply, xp.id)
@@ -122,12 +122,12 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 // ------------------------------ VIEW-CHANGE RPC -----------------------------
 //
 func (xp *XPaxos) sendViewChange(server int, msg ViewChangeMessage, reply *Reply) bool {
-	if xp.byzantine == true {
-		for i := len(msg.Signature) - 1; i > 0; i-- {
-			j := rand.Intn(i + 1)
-			msg.Signature[i], msg.Signature[j] = msg.Signature[j], msg.Signature[i]
-		}
-	}
+	//if xp.byzantine == true {
+	//	for i := len(msg.Signature) - 1; i > 0; i-- {
+	//		j := rand.Intn(i + 1)
+	//		msg.Signature[i], msg.Signature[j] = msg.Signature[j], msg.Signature[i]
+	//	}
+	//}
 
 	dPrintf("ViewChange: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.ViewChange", msg, reply, xp.id)
@@ -221,12 +221,12 @@ func (xp *XPaxos) ViewChange(msg ViewChangeMessage, reply *Reply) {
 // ------------------------------- VC-FINAL RPC -------------------------------
 //
 func (xp *XPaxos) sendVCFinal(server int, msg VCFinalMessage, reply *Reply) bool {
-	if xp.byzantine == true {
-		for i := len(msg.Signature) - 1; i > 0; i-- {
-			j := rand.Intn(i + 1)
-			msg.Signature[i], msg.Signature[j] = msg.Signature[j], msg.Signature[i]
-		}
-	}
+	//if xp.byzantine == true {
+	//	for i := len(msg.Signature) - 1; i > 0; i-- {
+	//		j := rand.Intn(i + 1)
+	//		msg.Signature[i], msg.Signature[j] = msg.Signature[j], msg.Signature[i]
+	//	}
+	//}
 
 	dPrintf("VCFinal: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.VCFinal", msg, reply, xp.id)
@@ -403,12 +403,12 @@ func (xp *XPaxos) VCFinal(msg VCFinalMessage, reply *Reply) {
 // -------------------------------- NEW-VIEW RPC ------------------------------
 //
 func (xp *XPaxos) sendNewView(server int, msg NewViewMessage, reply *Reply) bool {
-	if xp.byzantine == true {
-		for i := len(msg.Signature) - 1; i > 0; i-- {
-			j := rand.Intn(i + 1)
-			msg.Signature[i], msg.Signature[j] = msg.Signature[j], msg.Signature[i]
-		}
-	}
+	//if xp.byzantine == true {
+	//	for i := len(msg.Signature) - 1; i > 0; i-- {
+	//		j := rand.Intn(i + 1)
+	//		msg.Signature[i], msg.Signature[j] = msg.Signature[j], msg.Signature[i]
+	//	}
+	//}
 
 	dPrintf("NewView: from XPaxos server (%d) to XPaxos server (%d)\n", xp.id, server)
 	return xp.replicas[server].Call("XPaxos.NewView", msg, reply, xp.id)
