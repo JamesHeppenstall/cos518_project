@@ -1,22 +1,5 @@
 package pbft
 
-// RPC handlers for the XPaxos common case (replicate, prepare, commit, reply)
-// XPaxos operates under a system model called Cross Fault-Tolerance (XFT) that lies
-// between Crash Fault-Tolerance (CFT) and Byzantine Fault-Tolerance (BFT)
-//
-// XFT Assumptions:
-// (1) Clients and replicas can suffer Byzantine faults
-// (2) All replicas share reliable bi-directional communication channels
-// (3) An *eventually synchronous* network model (i.e. there always exists a majority
-//     of replicas - a synchronous group - that can send RPCs within some time frame
-//     delta)
-//
-// We simulate a network in the eponymous package - in particular, this allows gives us
-// fine-grained control over the time frame delta (defined in network/common.go - line 9)
-//
-// xp := Make(replicas, id, privateKey, publicKeys) - Creates an XPaxos server
-// => Option to perform cleanup with xp.Kill()
-
 import (
 	"crypto/rsa"
 	"network"
@@ -32,7 +15,7 @@ func (pbft *Pbft) Replicate(request ClientRequest, reply *Reply) {
 	reply.MsgDigest = msgDigest
 	reply.Signature = signature
 
-	if pbft.id == pbft.getLeader() { // If XPaxos server is the leader
+	if pbft.id == pbft.getLeader() { // If PBFT server is the leader
 		reply.IsLeader = true
 		pbft.mu.Lock()
 		pbft.prepareSeqNum = request.Timestamp
@@ -68,7 +51,7 @@ func (pbft *Pbft) sendPrePrepare(server int, prepareEntry PrepareLogEntry, reply
 func (pbft *Pbft) issuePrePrepare(server int, prepareEntry PrepareLogEntry) {
 	reply := &Reply{}
 	if ok := pbft.sendPrePrepare(server, prepareEntry, reply); ok {
-	
+
 	}
 }
 
@@ -91,8 +74,6 @@ func (pbft *Pbft) PrePrepare(prepareEntry PrepareLogEntry, reply *Reply) {
 	}
 }
 
-
-
 //
 // -------------------------------- PREPARE RPC -------------------------------
 //
@@ -109,8 +90,6 @@ func (pbft *Pbft) issuePrepare(server int, prepareEntry PrepareLogEntry) {
 	}
 }
 
-
-
 func (pbft *Pbft) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 	// By default reply.Success = false and reply.Suspicious = false
 	verification := pbft.verify(prepareEntry.Msg0.SenderId, prepareEntry.Msg0.MsgDigest, prepareEntry.Msg0.Signature)
@@ -118,7 +97,7 @@ func (pbft *Pbft) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 	if verification == true && pbft.view == prepareEntry.Msg0.View {
 		pbft.mu.Lock()
 		if ok := pbft.addToPrepareLog(prepareEntry); ok {
-			if len(pbft.prepareLog[prepareEntry.Msg0.PrepareSeqNum].Msg1) >= 2 * (len(pbft.replicas) - 2)/3 {
+			if len(pbft.prepareLog[prepareEntry.Msg0.PrepareSeqNum].Msg1) >= 2*(len(pbft.replicas)-2)/3 {
 				msgDigest := digest(prepareEntry.Request)
 				signature := pbft.sign(msgDigest)
 				pbft.prepareSeqNum = prepareEntry.Msg0.PrepareSeqNum
@@ -132,7 +111,7 @@ func (pbft *Pbft) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 					ClientTimestamp: prepareEntry.Request.Timestamp,
 					SenderId:        pbft.id}
 
-				cmsg := CommitMessage {
+				cmsg := CommitMessage{
 					msg, prepareEntry.Request}
 
 				pbft.mu.Unlock()
@@ -172,7 +151,7 @@ func (pbft *Pbft) Commit(msg CommitMessage, reply *Reply) {
 	if pbft.verify(msg.Msg.SenderId, msg.Msg.MsgDigest, msg.Msg.Signature) == true {
 		pbft.mu.Lock()
 		if ok := pbft.addToCommitLog(msg); ok {
-			if len(pbft.commitLog[msg.Msg.PrepareSeqNum].Msg1) >= 2 * (len(pbft.replicas) - 2)/3 && pbft.executeSeqNum < msg.Msg.PrepareSeqNum {
+			if len(pbft.commitLog[msg.Msg.PrepareSeqNum].Msg1) >= 2*(len(pbft.replicas)-2)/3 && pbft.executeSeqNum < msg.Msg.PrepareSeqNum {
 				dPrintf("Server %d SeqNum %d Commits %d ", pbft.id, msg.Msg.PrepareSeqNum, len(pbft.commitLog[msg.Msg.PrepareSeqNum].Msg1))
 				pbft.executeSeqNum = msg.Msg.PrepareSeqNum
 				pbft.mu.Unlock()
@@ -189,7 +168,7 @@ func (pbft *Pbft) Commit(msg CommitMessage, reply *Reply) {
 //
 func (pbft *Pbft) sendReply(creply ClientReply, reply *Reply) bool {
 	iPrintf("Reply: from Pbft server (%d) to Pbft server (%d) for SeqNum %d\n", pbft.id, CLIENT, creply.Timestamp)
-	return pbft.replicas[CLIENT].Call("Client.Reply", creply, reply,  pbft.id)
+	return pbft.replicas[CLIENT].Call("Client.Reply", creply, reply, pbft.id)
 }
 
 func (pbft *Pbft) issueReply(msg CommitMessage) {

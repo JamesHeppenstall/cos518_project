@@ -2,10 +2,11 @@ package pbft
 
 import (
 	"fmt"
-	"testing"
 	"math/rand"
+	"testing"
 	"time"
 )
+
 func TestCommonCase3(t *testing.T) {
 	servers := 5
 	cfg := makeConfig(t, servers, false)
@@ -16,7 +17,7 @@ func TestCommonCase3(t *testing.T) {
 	op := make([]byte, 1024)
 	rand.Read(op) // Operation is a 1 kB random byte array
 
-	iters :=500
+	iters := 500
 	for i := 0; i < iters; i++ {
 		ok := cfg.client.Propose(op)
 		for ok == false {
@@ -25,7 +26,7 @@ func TestCommonCase3(t *testing.T) {
 		}
 	}
 
-	fmt.Printf("Client Proposed: %d Client Committed: %d\n", cfg.client.timestamp - 1, cfg.client.committed)
+	fmt.Printf("Client Proposed: %d Client Committed: %d\n", cfg.client.timestamp-1, cfg.client.committed)
 	cfg.rpcCounts()
 	cfg.checkLogs()
 }
@@ -45,7 +46,7 @@ func (cfg *config) checkLogs() {
 }
 
 func benchmarkNoFaults(n int, size int, b *testing.B) {
-	servers := n // The number of XPaxos servers is n-1 (client included!)
+	servers := n // The number of PBFT servers is n-1 (client included!)
 	cfg := makeConfig(nil, servers, false)
 	defer cfg.cleanup()
 
@@ -58,8 +59,7 @@ func benchmarkNoFaults(n int, size int, b *testing.B) {
 	}
 }
 
-
-// Benchmark_3_0 - Number of XPaxos servers = 4 (t=1), No Faults
+// Benchmark_3_0 - Number of PBFT servers = 4 (t=1), No Faults
 func Benchmark_4_0_1kB(b *testing.B)   { benchmarkNoFaults(5, 1024, b) }
 func Benchmark_4_0_2kB(b *testing.B)   { benchmarkNoFaults(5, 2048, b) }
 func Benchmark_4_0_4kB(b *testing.B)   { benchmarkNoFaults(5, 4096, b) }
@@ -75,7 +75,7 @@ func Benchmark_4_0_2MB(b *testing.B)   { benchmarkNoFaults(5, 2097152, b) }
 func Benchmark_4_0_4MB(b *testing.B)   { benchmarkNoFaults(5, 4194304, b) }
 func Benchmark_4_0_8MB(b *testing.B)   { benchmarkNoFaults(5, 8388608, b) }
 
-// Benchmark_5_0 - Number of XPaxos servers = 7 (t=2), No Faults
+// Benchmark_5_0 - Number of PBFT servers = 7 (t=2), No Faults
 func Benchmark_7_0_1kB(b *testing.B)   { benchmarkNoFaults(7, 1024, b) }
 func Benchmark_7_0_2kB(b *testing.B)   { benchmarkNoFaults(7, 2048, b) }
 func Benchmark_7_0_4kB(b *testing.B)   { benchmarkNoFaults(7, 4096, b) }
@@ -91,7 +91,7 @@ func Benchmark_7_0_2MB(b *testing.B)   { benchmarkNoFaults(7, 2097152, b) }
 func Benchmark_7_0_4MB(b *testing.B)   { benchmarkNoFaults(7, 4194304, b) }
 func Benchmark_7_0_8MB(b *testing.B)   { benchmarkNoFaults(7, 8388608, b) }
 
-// Benchmark_11_0 - Number of XPaxos servers = 16 (t=5), No Faults
+// Benchmark_11_0 - Number of PBFT servers = 16 (t=5), No Faults
 func Benchmark_16_0_1kB(b *testing.B)   { benchmarkNoFaults(12, 1024, b) }
 func Benchmark_16_0_2kB(b *testing.B)   { benchmarkNoFaults(12, 2048, b) }
 func Benchmark_16_0_4kB(b *testing.B)   { benchmarkNoFaults(12, 4096, b) }

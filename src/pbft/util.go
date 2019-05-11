@@ -73,7 +73,7 @@ func (pbft *Pbft) generateSynchronousGroup(seed int64) {
 	pbft.synchronousGroup = make(map[int]bool, 0)
 
 	for i, _ := range pbft.replicas {
-		if i != CLIENT {	
+		if i != CLIENT {
 			pbft.synchronousGroup[i] = true
 		}
 	}
@@ -84,7 +84,7 @@ func (pbft *Pbft) appendToPrepareLog(request ClientRequest, msg Message) Prepare
 	for request.Timestamp >= len(pbft.prepareLog) {
 		pbft.prepareLog = append(pbft.prepareLog, pEDefault)
 	}
-	pE := pbft.prepareLog[request.Timestamp];
+	pE := pbft.prepareLog[request.Timestamp]
 
 	if len(pE.Msg1) == 0 {
 		msgMap := make(map[int]Message)
@@ -95,16 +95,16 @@ func (pbft *Pbft) appendToPrepareLog(request ClientRequest, msg Message) Prepare
 			Msg1:    msgMap}
 
 		pbft.prepareLog = append(pbft.prepareLog, prepareEntry)
-	} 
-	msgMapCopy :=  make(map[int]Message)
+	}
+	msgMapCopy := make(map[int]Message)
 	prepareEntryCopy := PrepareLogEntry{
-			Request: request,
-			Msg0:    msg,
-			Msg1:    msgMapCopy}
+		Request: request,
+		Msg0:    msg,
+		Msg1:    msgMapCopy}
 	return prepareEntryCopy
 }
 
-func (pbft *Pbft) addToPrepareLog(prepareLog PrepareLogEntry) bool  {
+func (pbft *Pbft) addToPrepareLog(prepareLog PrepareLogEntry) bool {
 	sender := prepareLog.Hop
 	if sender == 0 {
 		sender = prepareLog.Msg0.SenderId
@@ -113,10 +113,10 @@ func (pbft *Pbft) addToPrepareLog(prepareLog PrepareLogEntry) bool  {
 	for prepareLog.Msg0.PrepareSeqNum >= len(pbft.prepareLog) {
 		pbft.prepareLog = append(pbft.prepareLog, pEDefault)
 	}
-	if (prepareLog.Msg0.PrepareSeqNum < len(pbft.prepareLog)) {
-		pE := pbft.prepareLog[prepareLog.Msg0.PrepareSeqNum];
+	if prepareLog.Msg0.PrepareSeqNum < len(pbft.prepareLog) {
+		pE := pbft.prepareLog[prepareLog.Msg0.PrepareSeqNum]
 
-		if len(pE.Msg1) == 0{
+		if len(pE.Msg1) == 0 {
 			msgMap := make(map[int]Message)
 			msgMap[sender] = prepareLog.Msg0
 			prepareEntry := PrepareLogEntry{
@@ -127,7 +127,7 @@ func (pbft *Pbft) addToPrepareLog(prepareLog PrepareLogEntry) bool  {
 			return false
 		} else {
 			pE.Msg1[sender] = prepareLog.Msg0
-			if len(pE.Msg1) >= 2 * (len(pbft.replicas) - 2)/3 {
+			if len(pE.Msg1) >= 2*(len(pbft.replicas)-2)/3 {
 				return true
 			}
 			return false
@@ -136,13 +136,13 @@ func (pbft *Pbft) addToPrepareLog(prepareLog PrepareLogEntry) bool  {
 	return false
 }
 
-func (pbft *Pbft) addToCommitLog(cmsg CommitMessage) bool  {
+func (pbft *Pbft) addToCommitLog(cmsg CommitMessage) bool {
 	cEDefault := CommitLogEntry{}
-	for cmsg.Msg.PrepareSeqNum >=  len(pbft.commitLog) {
+	for cmsg.Msg.PrepareSeqNum >= len(pbft.commitLog) {
 		pbft.commitLog = append(pbft.commitLog, cEDefault)
 	}
-	if (cmsg.Msg.PrepareSeqNum< len(pbft.commitLog)) {
-		cE := pbft.commitLog[cmsg.Msg.PrepareSeqNum];
+	if cmsg.Msg.PrepareSeqNum < len(pbft.commitLog) {
+		cE := pbft.commitLog[cmsg.Msg.PrepareSeqNum]
 
 		if len(cE.Msg1) == 0 {
 			msgMap := make(map[int]Message)
@@ -155,7 +155,7 @@ func (pbft *Pbft) addToCommitLog(cmsg CommitMessage) bool  {
 			return false
 		} else {
 			cE.Msg1[cmsg.Msg.SenderId] = cmsg.Msg
-			if len(cE.Msg1) >= 2 * (len(pbft.replicas) - 2)/3 {
+			if len(cE.Msg1) >= 2*(len(pbft.replicas)-2)/3 {
 				return true
 			}
 			return false
@@ -163,7 +163,6 @@ func (pbft *Pbft) addToCommitLog(cmsg CommitMessage) bool  {
 	}
 	return false
 }
-
 
 func (pbft *Pbft) appendToCommitLog(request ClientRequest, msg Message, msgMap map[int]Message) {
 	commitEntry := CommitLogEntry{
@@ -206,7 +205,6 @@ func (pbft *Pbft) compareLogs(prepareLog []PrepareLogEntry, commitLog []CommitLo
 		return true
 	}
 }
-
 
 //
 // ------------------------------ TEST FUNCTIONS ------------------------------

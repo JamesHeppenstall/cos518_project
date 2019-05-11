@@ -35,7 +35,7 @@ func makeConfig(t *testing.T, n int, unreliable bool) *config {
 
 	cfg.startClient() // Create client server
 
-	for i := 1; i < cfg.n; i++ { // Create a full set of XPaxos servers
+	for i := 1; i < cfg.n; i++ { // Create a full set of PBFT servers
 		cfg.start1(i)
 	}
 
@@ -46,7 +46,7 @@ func makeConfig(t *testing.T, n int, unreliable bool) *config {
 	return cfg
 }
 
-// Shut down an XPaxos server
+// Shut down an PBFT server
 func (cfg *config) crash1(i int) {
 	if i == CLIENT {
 		dPrintf("Cannot call crash1() on client server; must call crashClient()")
@@ -68,8 +68,8 @@ func (cfg *config) crash1(i int) {
 	}
 }
 
-// Start or re-start an XPaxos server; if one already exists, "kill" it first
-// Allocate new outgoing port file names to isolate previous instance of this server since we 
+// Start or re-start an PBFT server; if one already exists, "kill" it first
+// Allocate new outgoing port file names to isolate previous instance of this server since we
 // cannot really kill it
 func (cfg *config) start1(i int) {
 	if i == CLIENT {
@@ -177,7 +177,7 @@ func (cfg *config) connect(i int) {
 		if i == CLIENT {
 			dPrintf("Connected: client server (%d)\n", i)
 		} else {
-			dPrintf("Connected: XPaxos server (%d)\n", i)
+			dPrintf("Connected: PBFT server (%d)\n", i)
 		}
 	}
 
@@ -204,7 +204,7 @@ func (cfg *config) disconnect(i int) {
 		if i == CLIENT {
 			dPrintf("Disconnected: client server (%d)\n", i)
 		} else {
-			dPrintf("Disconnected: XPaxos server (%d)\n", i)
+			dPrintf("Disconnected: PBFT server (%d)\n", i)
 		}
 	}
 

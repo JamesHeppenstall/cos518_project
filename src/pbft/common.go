@@ -7,11 +7,11 @@ import (
 	"testing"
 )
 
-const DEBUG = 0       // Debugging (0 = None, 1 = Info, 2 = Debug)
-const CLIENT = 0      // Client ID is always set to zero - DO NOT CHANGE
-const TIMEOUT = 500 // Client timeout period (in milliseconds)
-const WAIT = false     // If false, client times out after TIMEOUT milliseconds; if true, client never times out
-const BITSIZE = 1024  // RSA private key bit size
+const DEBUG = 0      // Debugging (0 = None, 1 = Info, 2 = Debug)
+const CLIENT = 0     // Client ID is always set to zero - DO NOT CHANGE
+const TIMEOUT = 500  // Client timeout period (in milliseconds)
+const WAIT = false   // If false, client times out after TIMEOUT milliseconds; if true, client never times out
+const BITSIZE = 1024 // RSA private key bit size
 
 const ( // RPC message types for common case and view change protocols
 	REPLICATE  = iota
@@ -29,11 +29,11 @@ type config struct {
 	mu          sync.Mutex
 	t           *testing.T
 	net         *network.Network
-	n           int   // Total number of client and XPaxos servers
+	n           int   // Total number of client and PBFT servers
 	done        int32 // Tell internal threads to die
 	pbftServers []*Pbft
 	client      *Client
-	connected   []bool // Whether each server is on the net
+	connected   []bool     // Whether each server is on the net
 	endnames    [][]string // The port file names each sends to
 	privateKeys map[int]*rsa.PrivateKey
 	publicKeys  map[int]*rsa.PublicKey
@@ -46,7 +46,7 @@ type Client struct {
 	committed int
 	vcCh      chan bool
 	// Must include statistics for evaluation
-	replyMap  []map[int]bool
+	replyMap []map[int]bool
 }
 
 type Pbft struct {
@@ -67,7 +67,7 @@ type PrepareLogEntry struct {
 	Request ClientRequest
 	Msg1    map[int]Message
 	Msg0    Message
-	Hop 	int
+	Hop     int
 }
 
 type CommitLogEntry struct {
@@ -95,7 +95,7 @@ type Message struct {
 }
 
 type CommitMessage struct {
-	Msg Message
+	Msg     Message
 	Request ClientRequest
 }
 
@@ -108,6 +108,6 @@ type Reply struct {
 }
 
 type ClientReply struct {
-	Commiter  int 
+	Commiter  int
 	Timestamp int
 }

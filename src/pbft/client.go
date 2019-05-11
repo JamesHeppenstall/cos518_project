@@ -1,10 +1,5 @@
 package pbft
 
-// RPC handlers for an XPaxos client server (propose)
-//
-// client := MakeClient(replicas) - Creates an XPaxos client server
-// => Option to perform cleanup with xp.Kill()
-
 import (
 	"network"
 	"time"
@@ -75,14 +70,14 @@ func (client *Client) Reply(creply ClientReply, reply *Reply) {
 	defer client.mu.Unlock()
 	iPrintf("%d %d %d %d", len(client.replyMap), creply.Timestamp, len(client.replyMap[creply.Timestamp]), creply.Commiter)
 	client.replyMap[creply.Timestamp][creply.Commiter] = true
-	if len(client.replyMap[creply.Timestamp]) >= 2*(len(client.replicas) - 2)/3 && client.committed < creply.Timestamp {
+	if len(client.replyMap[creply.Timestamp]) >= 2*(len(client.replicas)-2)/3 && client.committed < creply.Timestamp {
 		client.committed = creply.Timestamp
 		iPrintf("committed: %d", client.committed)
 		client.vcCh <- true
 	}
 }
 
-func (client *Client) RePropose(op interface{}) bool { // For simplicity, we assume the client's proposal is correct
+func (client *Client) RePropose(op interface{}) bool {
 	var timer <-chan time.Time
 	iPrintf("Repropose")
 	//client.mu.Lock()
@@ -142,4 +137,3 @@ func MakeClient(replicas []*network.ClientEnd) *Client {
 }
 
 func (client *Client) Kill() {}
-
