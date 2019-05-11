@@ -446,16 +446,39 @@ func TestByzantineFault3(t *testing.T) {
 
 	iters := 50
 	for i := 0; i < iters; i++ {
-		//iPrintf("FAULT: %d\n", fault)
-		//for i, _ := range cfg.xpServers {
-		//	if i != 0 {
-		//		iPrintf("BYZANTINE: %d %v\n", i, cfg.xpServers[i].byzantine)
-		//	}
-		//}
 		cfg.client.Propose(nil)
 		cfg.xpServers[fault].byzantine = false
 		fault = rand.Intn(servers-1) + 1
 		cfg.xpServers[fault].byzantine = true
+	}
+
+	comparePrepareSeqNums(cfg)
+	compareExecuteSeqNums(cfg)
+	comparePrepareLogEntries(cfg)
+	compareCommitLogEntries(cfg)
+}
+
+func TestByzantineFault4(t *testing.T) {
+	servers := 10
+	cfg := makeConfig(t, servers, false)
+	defer cfg.cleanup()
+
+	fault1 := rand.Intn(servers-1) + 1
+	fault2 := rand.Intn(servers-1) + 1
+	cfg.xpServers[fault1].byzantine = true
+	cfg.xpServers[fault2].byzantine = true
+
+	fmt.Println("Test: Byzantine Fault - Multiple Failures (t>1)")
+
+	iters := 10
+	for i := 0; i < iters; i++ {
+		cfg.client.Propose(nil)
+		cfg.xpServers[fault1].byzantine = false
+		cfg.xpServers[fault2].byzantine = false
+		fault1 = rand.Intn(servers-1) + 1
+		fault2 = rand.Intn(servers-1) + 1
+		cfg.xpServers[fault1].byzantine = true
+		cfg.xpServers[fault2].byzantine = true
 	}
 
 	comparePrepareSeqNums(cfg)
@@ -526,13 +549,13 @@ func benchmarkRandomCrashFaults2(n int, size int, b *testing.B) {
 	}
 }
 
-/*func benchmarkByzantineFault(n int, size int, b *testing.B) {
+func benchmarkByzantineFault(n int, size int, b *testing.B) {
 	servers := n // The number of XPaxos servers is n-1 (client included!)
 	cfg := makeConfig(nil, servers, false)
 	defer cfg.cleanup()
 
-	crash := rand.Intn(servers-1) + 1
-	cfg.net.SetFaultRate(crash, 100)
+	fault := rand.Intn(servers-1) + 1
+	cfg.xpServers[fault].byzantine = true
 
 	op := make([]byte, size)
 	rand.Read(op) // Operation is random byte array of size bytes
@@ -540,11 +563,11 @@ func benchmarkRandomCrashFaults2(n int, size int, b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cfg.client.Propose(op)
-		cfg.net.SetFaultRate(crash, 0)
-		crash = rand.Intn(servers-1) + 1
-		cfg.net.SetFaultRate(crash, 100)
+		cfg.xpServers[fault].byzantine = false
+		fault = rand.Intn(servers-1) + 1
+		cfg.xpServers[fault].byzantine = true
 	}
-}*/
+}
 
 // Benchmark_3_0 - Number of XPaxos servers = 3 (t=1), No Faults
 func Benchmark_3_0_1kB(b *testing.B)   { benchmarkNoFaults(4, 1024, b) }
@@ -595,19 +618,19 @@ func Benchmark_11_0_4MB(b *testing.B)   { benchmarkNoFaults(12, 4194304, b) }
 func Benchmark_11_0_8MB(b *testing.B)   { benchmarkNoFaults(12, 8388608, b) }
 
 // Benchmark_3_R1 - Number of XPaxos servers = 3 (t=1), One Random Crash Fault
-func Benchmark_3_R1_256kB(b *testing.B) { benchmarkRandomCrashFaults1(4, 262144, b) }
+//func Benchmark_3_R1_256kB(b *testing.B) { benchmarkRandomCrashFaults1(4, 262144, b) }
 
 // Benchmark_5_R1 - Number of XPaxos servers = 5 (t=2), One Random Crash Fault
-func Benchmark_5_R1_256kB(b *testing.B) { benchmarkRandomCrashFaults1(6, 262144, b) }
+//func Benchmark_5_R1_256kB(b *testing.B) { benchmarkRandomCrashFaults1(6, 262144, b) }
 
 // Benchmark_11_R1 - Number of XPaxos servers = 11 (t=5), One Random Crash Fault
-func Benchmark_11_R1_256kB(b *testing.B) { benchmarkRandomCrashFaults1(12, 262144, b) }
+//func Benchmark_11_R1_256kB(b *testing.B) { benchmarkRandomCrashFaults1(12, 262144, b) }
 
 // Benchmark_5_R2 - Number of XPaxos servers = 5 (t=2), Two Random Crash Faults
-func Benchmark_5_R2_256kB(b *testing.B) { benchmarkRandomCrashFaults2(6, 262144, b) }
+//func Benchmark_5_R2_256kB(b *testing.B) { benchmarkRandomCrashFaults2(6, 262144, b) }
 
 // Benchmark_11_R2 - Number of XPaxos servers = 11 (t=5), Two Random Crash Faults
-func Benchmark_11_R2_256kB(b *testing.B) { benchmarkRandomCrashFaults2(12, 262144, b) }
+//func Benchmark_11_R2_256kB(b *testing.B) { benchmarkRandomCrashFaults2(12, 262144, b) }
 
 // Benchmark_3_B - Number of XPaxos servers = 3 (t=1), One Byzantine Fault
 //func Benchmark_3_B_256kB(b *testing.B) { benchmarkByzantineFault(4, 262144, b) }
