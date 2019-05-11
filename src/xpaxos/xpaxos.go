@@ -204,7 +204,7 @@ func (xp *XPaxos) Prepare(prepareEntry PrepareLogEntry, reply *Reply) {
 
 		// Busy wait until XPaxos server receives commit messages from entire synchronous group
 		xp.mu.Lock()
-		for len(xp.commitLog[xp.executeSeqNum].Msg1) != len(xp.synchronousGroup)-1 {
+		for xp.executeSeqNum < len(xp.commitLog) && len(xp.commitLog[xp.executeSeqNum].Msg1) != len(xp.synchronousGroup)-1 {
 			xp.mu.Unlock()
 			select {
 			case <-timer:
