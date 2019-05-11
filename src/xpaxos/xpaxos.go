@@ -261,6 +261,7 @@ func (xp *XPaxos) issueCommit(server int, msg Message, replyCh chan bool) {
 			if reply.Success == true {
 				replyCh <- reply.Success
 			} else if reply.Suspicious == true {
+				xp.mu.Unlock()
 				return
 			} else {
 				go xp.issueCommit(server, msg, replyCh) // Retransmit if commit RPC fails - DO NOT CHANGE

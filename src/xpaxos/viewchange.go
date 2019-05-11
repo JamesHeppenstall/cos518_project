@@ -94,8 +94,8 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 
 	_, ok := xp.suspectSet[digest(msg)]
 
-	if xp.view <= msg.View && ok == false {
-		if bytes.Compare(msg.MsgDigest[:], msgDigest[:]) == 0 && xp.verify(msg.SenderId, msgDigest, msg.Signature) == true {
+	if bytes.Compare(msg.MsgDigest[:], msgDigest[:]) == 0 && xp.verify(msg.SenderId, msgDigest, msg.Signature) == true {
+		if xp.view <= msg.View && ok == false {
 			xp.suspectSet[digest(msg)] = msg
 
 			xp.view = msg.View + 1
@@ -112,9 +112,9 @@ func (xp *XPaxos) Suspect(msg SuspectMessage, reply *Reply) {
 				xp.netFlag = false
 				xp.netTimer = time.NewTimer(3 * network.DELTA * time.Millisecond).C
 			}
-		} else {
-			go xp.issueSuspect(xp.view)
 		}
+	} else {
+		go xp.issueSuspect(xp.view)
 	}
 }
 
