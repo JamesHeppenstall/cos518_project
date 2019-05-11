@@ -72,31 +72,33 @@ def plot_time_vs_throughput(n, filename1, filename2, op_size=262144):
 
 def plot_recovery_times():
 	# Measurements represent mean recovery time from 200 operations, Network delta = 50ms, Op size = 1kB 
-	mean_latency_3_R1 = 216791615.53 / 1e9
-	mean_latency_5_R1 = 224369102.625 / 1e9
-	mean_latency_11_R1 = 145684775.285 / 1e9
-	mean_latency_5_R2 = 393327915.27 / 1e9
-	mean_latency_11_R2 = 404786211.505 / 1e9
+	mean_latency_3_R1, mean_latency_5_R1, mean_latency_11_R1 = 216791615.53 / 1e9, 224369102.625 / 1e9, 145684775.285 / 1e9				
+	mean_latency_5_R2, mean_latency_11_R2 = 393327915.27 / 1e9, 404786211.505 / 1e9
+	mean_latency_3_B, mean_latency_5_B, mean_latency_11_B = 157450797.34 / 1e9, 168631641.81 / 1e9, 159564979.12 / 1e9
 
-	mean_latency_5 = [mean_latency_5_R1, mean_latency_5_R2]
-	mean_latency_11 = [mean_latency_11_R1, mean_latency_11_R2]
+	mean_latency_3 = [mean_latency_3_R1, mean_latency_3_B]
+	mean_latency_5 = [mean_latency_5_R1, mean_latency_5_R2, mean_latency_5_B]
+	mean_latency_11 = [mean_latency_11_R1, mean_latency_11_R2, mean_latency_11_B]
 
 	fig, ax = plt.subplots()
 	bar_width, opacity = 0.35, 0.8
 
-	rects1 = plt.bar(0, mean_latency_3_R1, bar_width, alpha=opacity, color="r", label="XPaxos (t=1)")
+	rects1 = plt.bar([0, 2], mean_latency_3, bar_width, alpha=opacity, color="r", label="XPaxos (t=1)")
 	plt.text(0, mean_latency_3_R1, "{0:.3f}s".format(mean_latency_3_R1), fontsize=10, horizontalalignment="center")
+	plt.text(2, mean_latency_3_B, "{0:.3f}s".format(mean_latency_3_B), fontsize=10, horizontalalignment="center")
 	
-	rects2 = plt.bar([bar_width, 1 + 0.5 * bar_width], mean_latency_5, bar_width, alpha=opacity, color="g", label="XPaxos (t=2)")
+	rects2 = plt.bar([bar_width, 1 + 0.5 * bar_width, 2 + bar_width], mean_latency_5, bar_width, alpha=opacity, color="g", label="XPaxos (t=2)")
 	plt.text(bar_width, mean_latency_5_R1, "{0:.3f}s".format(mean_latency_5_R1), fontsize=10, horizontalalignment="center")
-	plt.text(1 + bar_width / 2, mean_latency_5_R2, "{0:.3f}s".format(mean_latency_5_R2), fontsize=10, horizontalalignment="center")
+	plt.text(1 + 0.5 * bar_width, mean_latency_5_R2, "{0:.3f}s".format(mean_latency_5_R2), fontsize=10, horizontalalignment="center")
+	plt.text(2 + bar_width, mean_latency_5_B, "{0:.3f}s".format(mean_latency_5_B), fontsize=10, horizontalalignment="center")
 
-	rects3 = plt.bar([2 * bar_width, 1 + 1.5 * bar_width], mean_latency_11, bar_width, alpha=opacity, color="b", label="XPaxos (t=5)")
+	rects3 = plt.bar([2 * bar_width, 1 + 1.5 * bar_width, 2 + 2 * bar_width], mean_latency_11, bar_width, alpha=opacity, color="b", label="XPaxos (t=5)")
 	plt.text(2 * bar_width, mean_latency_11_R1, "{0:.3f}s".format(mean_latency_11_R1), fontsize=10, horizontalalignment="center")
 	plt.text(1 + 1.5 * bar_width, mean_latency_11_R2, "{0:.3f}s".format(mean_latency_11_R2), fontsize=10, horizontalalignment="center")
+	plt.text(2 + 2 * bar_width, mean_latency_11_B, "{0:.3f}s".format(mean_latency_11_B), fontsize=10, horizontalalignment="center")
 
-	plt.title("Fault Recovery Times Per Operation (1kB)")
-	plt.xticks(np.arange(2) + bar_width, ["1 Crash Failure", "2 Crash Failures"])
+	plt.title("Fault Recovery Times")
+	plt.xticks(np.arange(3) + bar_width, ["1 Crash Fault", "2 Crash Faults", "1 Byzantine Fault"])
 	plt.ylabel("Time (s)")
 	plt.ylim()
 	plt.legend()
